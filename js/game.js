@@ -148,9 +148,12 @@ function newRun() {
     squad: [], rescues: [], rescued: [], trail: [], nextRescue: 25, lastScare: -99, rescueCount: 0, rescueTold: false, rescueSpd: 1, compMul: 1,
     sk: { id: save.skill, cd: 0, max: 1 } };
   G.rescueSpd = hasF('plant') ? 1.3 : 1; G.compMul = hasF('toy') ? 1.4 : 1;
+  G.squadMax = GN.SQUAD_MAX + shopLv('squadMax'); G.squadBuff = 0; G.frenzy = 0; G.shieldT = 0;
   const comp = save.home.cats.find(c => c.uid === save.home.companion);
   if (comp) { const m = newMember(comp.breed, comp.name, -24, 4); m.companion = true; m.stars = bondStars(comp.bond); G.squad.push(m); }
   addWeapon(CATS[save.cat].weapon); recalc(); G.p.hp = G.p.maxHp;
+  if (shopLv('startWeapon')) { const pool = Object.keys(WEAPONS).filter(id => id !== CATS[save.cat].weapon && unlocked('w', id)); if (pool.length) { addWeapon(pick(pool)); recalc(); } }
+  const sl = shopLv('startLv'); if (sl) { G.level += sl; G.need = xpNeed(G.level); G.pendingLv += sl; }
 }
 function addWeapon(id) { G.p.weapons.push({ id, lv: 1, evo: false, t: 0.4, ang: 0, burst: 0, bt: 0, tt: 0, pets: [], S: null }); }
 const plv = id => { const s = G.p.passives.find(x => x.id === id); return s ? s.lv : 0; };
@@ -178,7 +181,16 @@ function recalc() {
   p.greed = 1 + 0.1 * plv('piggy') + 0.1 * s('greed') + (m.greed || 0);
   p.curse = 1 + 0.1 * plv('glare');
   p.regen = 0.3 * plv('snack') + 0.1 * s('recovery') + (m.regen || 0);
-  const mh = Math.max(20, Math.round((100 + (m.hp || 0) + (hasF('bowl') ? 10 : 0)) * (1 + 0.2 * plv('belly') + 0.1 * s('maxhp'))));
+  p.crit = 0.05 * plv('fang') + 0.02 * s('critC') + (m.crit || 0); p.critDmg = 0.25 * plv('hunter') + 0.1 * s('critD');
+  p.leech = 0.3 * plv('warmFur') + 0.1 * s('leech'); p.knock = 1 + 0.25 * plv('heavyPaw') + 0.15 * s('knock');
+  p.dodge = Math.min(0.5, 0.04 * plv('windBell') + 0.01 * s('dodge')); p.thorns = plv('thornScarf') + s('thorn');
+  p.bossDmg = 0.15 * plv('bossBadge') + 0.05 * s('bossDmg');
+  p.rescueMul = 1 + 0.2 * plv('rescueVest') + 0.1 * s('rescue') + (hasF('tunnel') ? 0.15 : 0);
+  p.squadMul = 1 + 0.15 * plv('leaderScarf') + (hasF('flowerbed') ? 0.1 : 0); p.skillMul = Math.max(0.4, 1 - 0.08 * plv('stretch'));
+  p.coinDrop = 1 + 0.3 * plv('coinLuck') + 0.1 * s('coinDrop'); const sh = plv('shieldFur'); p.shieldCd = sh ? 14 - 2 * sh : s('shield') ? 15 : 0;
+  p.berserk = plv('nightOwl') ? 0.1 + 0.1 * plv('nightOwl') : 0; p.stillRegen = plv('napPillow'); p.pierce = plv('awl') + s('pierce'); p.momentum = 0.08 * plv('dashShoes');
+  p.curse += 0.1 * s('challenge'); p.greed += 0.15 * s('challenge') + (hasF('parasol') ? 0.05 : 0);
+  const mh = Math.max(20, Math.round((100 + (m.hp || 0) + (hasF('bowl') ? 10 : 0) + (hasF('fountain') ? 10 : 0)) * (1 + 0.2 * plv('belly') + 0.1 * s('maxhp'))));
   if (mh > p.maxHp) p.hp += mh - p.maxHp; p.maxHp = mh; p.hp = Math.min(p.hp, mh);
   G.revTotal = plv('ninelives') + s('revival');
   for (const w of p.weapons) computeW(w);
@@ -212,7 +224,7 @@ function randTarget(maxD) {
 function spawn(type, o = {}) {
   const T = ENEMIES[type], p = G.p, elite = !!o.elite, m = G.t / 60;
   const fixed = !!(T.dash || T.boss || T.prop);
-  const hm = T.prop ? 1 : T.boss ? (o.hpMul || 1) : (1 + m * 0.1 + Math.max(0, m - 30) * 0.25) * p.curse;
+  const hm = (T.prop ? 1 : T.boss ? (o.hpMul || 1) : (1 + m * 0.1 + Math.max(0, m - 30) * 0.25) * p.curse) * (T.prop ? 1 : G.stage.hpMul || 1);
   const a = o.ang ?? rand(TAU), dist = o.dist ?? viewR(), sc = elite ? 1.6 : 1;
   const e = { type, T, x: o.x ?? p.x + Math.cos(a) * dist, y: o.y ?? p.y + Math.sin(a) * dist,
     hp: T.hp * hm * (elite ? 10 + m * 0.6 : 1), spd: T.spd * (elite ? 0.9 : 1) * rand(0.92, 1.08) * (fixed ? 1 : 1 + (p.curse - 1) * 0.5),
@@ -262,9 +274,11 @@ function spawnUpdate(dt) {
 function addNum(x, y, n, crit) { if (G.nums > 50) return; G.nums++; G.fx.push({ type: 'num', x: x + rand(-6, 6), y, n, crit, t: 0, life: 0.55 }); }
 function hurt(e, base, src, kx = 0, ky = 0, crit = false) {
   if (e.dead) return false;
-  const dmg = Math.max(1, Math.round(base * G.p.might * rand(0.9, 1.1) * (crit ? 2 : 1)));
+  if (CUR.id && src === CUR.kind) src = CUR.id;
+  const P = G.p; if (!crit && P.crit && src !== 'squad' && Math.random() < P.crit) crit = true;
+  const dmg = Math.max(1, Math.round(base * P.might * rand(0.9, 1.1) * (crit ? 2 + P.critDmg : 1) * (e.elite || e.T.boss ? 1 + P.bossDmg : 1) * (P.berserk && P.hp < P.maxHp * 0.5 ? 1 + P.berserk : 1)));
   e.hp -= dmg; e.flash = 0.09; e.hitT = 0.14; fxHit(e, kx, ky, crit); G.dmgBy[src] = (G.dmgBy[src] || 0) + Math.min(dmg, e.hp + dmg);
-  if (!e.heavy) { e.kx += kx; e.ky += ky; }
+  if (!e.heavy) { e.kx += kx * P.knock; e.ky += ky * P.knock; }
   addNum(e.x, e.y - e.r, dmg, crit); sfx('hit');
   if (e.hp <= 0) { kill(e); return true; }
   return false;
@@ -282,7 +296,7 @@ function kill(e) {
   e.dead = true; const T = e.T, p = G.p;
   fxKill(e);
   if (T.prop) { const r = Math.random(); drop(r < 0.4 ? 'churu' : r < 0.65 ? 'bag' : r < 0.8 ? 'bell' : r < 0.9 ? 'hiss' : 'clock', e.x, e.y, 10); return; }
-  G.kills++;
+  G.kills++; if (p.leech) p.hp = Math.min(p.maxHp, p.hp + p.leech);
   if (T.boss) {
     G.bossKills++; G.shake = 16; sfx('boom'); drop('box', e.x, e.y); drop('bag', e.x + 20, e.y, 50); drop('churu', e.x - 20, e.y);
     if (G.bossN >= 3 && !G.cleared) { G.cleared = true; save.stats.clears[G.stageId] = (save.stats.clears[G.stageId] || 0) + 1; }
@@ -292,12 +306,16 @@ function kill(e) {
   }
   if (e.xp > 0) drop('xp', e.x, e.y, e.xp);
   if (e.elite) { drop('box', e.x, e.y); return; }
+  if (p.coinDrop > 1 && Math.random() < 0.06 * (p.coinDrop - 1)) drop('coin', e.x + 6, e.y, 1);
   const r = Math.random() / p.luck;
   if (r < 0.06) drop('coin', e.x, e.y, 1); else if (r < 0.064) drop('churu', e.x, e.y); else if (r < 0.066) drop('bag', e.x, e.y, 10);
   else if (r < 0.0675) drop('bell', e.x, e.y); else if (r < 0.0683) drop('hiss', e.x, e.y); else if (r < 0.069) drop('clock', e.x, e.y);
 }
 function hurtPlayer(d) {
   const p = G.p; if (p.inv > 0 || G.endT >= 0 || p.jump || p.hide > 0) return;
+  if (p.dodge && Math.random() < p.dodge) { p.inv = 0.25; addNum(p.x, p.y - 22, '피함'); return; }
+  if (p.shieldCd && G.shieldT <= 0) { G.shieldT = p.shieldCd; p.inv = 0.5; G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 34, t: 0, life: 0.35, col: '#9fd0ff' }); sfx('box'); return; }
+  if (p.thorns) forNear(p.x, p.y, 80, e => { if (!e.T.prop && Math.hypot(e.x - p.x, e.y - p.y) < 80 + e.r) hurt(e, 8 * p.thorns * (1 + G.level * 0.03), 'thorns'); });
   p.hp -= Math.max(1, d - p.armor); p.inv = 0.55; G.shake = 9; sfx('hurt'); padRumble(140, 0.55); G.vig = 1; hitStop(0.035);
   if (G.squad.length && G.t - G.lastScare > 12 && Math.random() < 0.5) scareOne();
   if (p.hp > 0) return;
@@ -424,18 +442,29 @@ const TICK = {
     });
   },
 };
+/* new weapons borrow an older weapon's behaviour (kind); CUR lets hurt() credit the real weapon */
+const CUR = { id: null, kind: null, D: null };
+function tagNew(ns, nz, nf) {
+  const id = CUR.id, D = CUR.D, own = !!D.kind;
+  for (let i = ns; i < G.shots.length; i++) { const t = G.shots[i]; if (!t.src) t.src = id; if (own && !t.ico) t.ico = id; if (D.boomCol && !t.col) t.col = D.boomCol; if (G.p.pierce && t.pierce != null && t.pierce < 900 && !t.pierced) { t.pierce += G.p.pierce; t.pierced = true; } }
+  for (let i = nz; i < G.zones.length; i++) { const z = G.zones[i]; if (!z.src) z.src = id; if (own) z.ico = id; if (D.zcol) z.col = D.zcol; if (D.boomCol) z.bcol = D.boomCol; }
+  for (let i = nf; i < G.fx.length; i++) { const f = G.fx[i]; if (f.type === 'can') { f.src = id; if (own) f.ico = id; if (D.boomCol) f.col = D.boomCol; } else if (f.type === 'ring' && D.ringCol) f.col = D.ringCol; }
+}
 function weaponsUpdate(dt) {
-  for (const w of G.p.weapons) {
-    const S = w.S;
-    if (TICK[w.id]) { TICK[w.id](w, S, dt); continue; }
+  const p = G.p, wspd = (1 + (p.moving ? p.momentum : 0)) * (G.frenzy > 0 ? 2 : 1);
+  for (const w of p.weapons) {
+    const S = w.S, D = WEAPONS[w.id], K = D.kind || w.id; CUR.id = w.id; CUR.kind = K; CUR.D = D;
+    const ns = G.shots.length, nz = G.zones.length, nf = G.fx.length;
+    if (TICK[K]) { TICK[K](w, S, dt * wspd); tagNew(ns, nz, nf); continue; }
     if (w.burst > 0) { w.bt -= dt; if (w.bt <= 0) { fireHair(w, S, 0); w.burst--; w.bt = 0.09; } }
-    w.t -= dt; if (w.t <= 0) { w.t += Math.max(0.05, S.cd); if (w.t < 0) w.t = 0; FIRE[w.id](w, S); }
+    w.t -= dt * wspd; if (w.t <= 0) { w.t += Math.max(0.05, S.cd); if (w.t < 0) w.t = 0; FIRE[K](w, S); }
+    tagNew(ns, nz, nf);
   }
 }
 function shotsUpdate(dt) {
   const p = G.p, hw = W / 2 / ZOOM, hh = H / 2 / ZOOM;
   for (const s of G.shots) {
-    s.life -= dt; if (s.life <= 0) { if (s.kind === 'homing') boom(s.x, s.y, s.boom, s.dmg, 'sardine'); s.dead = true; continue; }
+    s.life -= dt; if (s.life <= 0) { if (s.kind === 'homing') boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col }); s.dead = true; continue; }
     if (s.kind === 'hair') {
       s.x += s.vx * dt; s.y += s.vy * dt;
       forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, s.src || 'hairball', s.vx * 0.3, s.vy * 0.3); if (--s.pierce <= 0) s.dead = true; } });
@@ -444,21 +473,21 @@ function shotsUpdate(dt) {
       if (!s.back) { dx = Math.cos(s.ang); dy = Math.sin(s.ang); s.sp -= 560 * dt; if (s.sp <= 0) { s.back = true; s.sp = 0; } }
       else { const ex = p.x - s.x, ey = p.y - s.y, d = Math.hypot(ex, ey) || 1; dx = ex / d; dy = ey / d; s.sp = Math.min(600, s.sp + 760 * dt); if (d < 20) { s.dead = true; continue; } }
       s.x += dx * s.sp * dt; s.y += dy * s.sp * dt;
-      forNear(s.x, s.y, s.r, e => { if (e.boneT > G.t) return; const ex = e.x - s.x, ey = e.y - s.y; if (ex * ex + ey * ey < (s.r + e.r) ** 2) { e.boneT = G.t + 0.35; hurt(e, s.dmg, 'fishbone', dx * 70, dy * 70); } });
+      forNear(s.x, s.y, s.r, e => { if (e.boneT > G.t) return; const ex = e.x - s.x, ey = e.y - s.y; if (ex * ex + ey * ey < (s.r + e.r) ** 2) { e.boneT = G.t + 0.35; hurt(e, s.dmg, s.src || 'fishbone', dx * 70, dy * 70); } });
     } else if (s.kind === 'lob') {
       s.vy += 780 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 9;
-      forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, 'bowl', s.vx * 0.3, 60); if (--s.pierce <= 0) s.dead = true; } });
+      forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, s.src || 'bowl', s.vx * 0.3, 60); if (--s.pierce <= 0) s.dead = true; } });
     } else if (s.kind === 'ball') {
       s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 8;
       if (s.x < p.x - hw && s.vx < 0 || s.x > p.x + hw && s.vx > 0) s.vx = -s.vx;
       if (s.y < p.y - hh && s.vy < 0 || s.y > p.y + hh && s.vy > 0) s.vy = -s.vy;
-      forNear(s.x, s.y, s.r, e => { if (e.ballT > G.t) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { e.ballT = G.t + 0.4; hurt(e, s.dmg, 'ball', s.vx * 0.25, s.vy * 0.25); } });
+      forNear(s.x, s.y, s.r, e => { if (e.ballT > G.t) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { e.ballT = G.t + 0.4; hurt(e, s.dmg, s.src || 'ball', s.vx * 0.25, s.vy * 0.25); } });
     } else if (s.kind === 'homing') {
       if (!s.tg || s.tg.dead) s.tg = nearest(s.x, s.y, 500);
       if (s.tg) { const dx = s.tg.x - s.x, dy = s.tg.y - s.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 7 * dt); s.vx += (dx / d * s.sp - s.vx) * k; s.vy += (dy / d * s.sp - s.vy) * k; }
       s.x += s.vx * dt; s.y += s.vy * dt; let hit = false;
       forNear(s.x, s.y, s.r, e => { if (hit) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) hit = true; });
-      if (hit) { boom(s.x, s.y, s.boom, s.dmg, 'sardine'); s.dead = true; }
+      if (hit) { boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col }); s.dead = true; }
     }
   }
 }
@@ -467,11 +496,11 @@ function zonesUpdate(dt) {
     if (z.dead) continue; z.life -= dt; if (z.life <= 0) { z.dead = true; continue; }
     if (z.kind === 'puddle') {
       z.tick -= dt; if (z.tick > 0) continue; z.tick = 0.4;
-      forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, 'spill'); if (z.slow) e.slow = 0.8; } });
+      forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, z.src || 'spill'); if (z.slow) e.slow = 0.8; } });
     } else {
       z.arm -= dt; if (z.arm > 0) continue; let hit = false;
       forNear(z.x, z.y, z.r, e => { if (!hit && !e.T.prop && Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) hit = true; });
-      if (hit) { z.dead = true; boom(z.x, z.y, z.boom, z.dmg, 'boxtrap', { stun: z.stun, col: '#d9a66b' }); }
+      if (hit) { z.dead = true; boom(z.x, z.y, z.boom, z.dmg, z.src || 'boxtrap', { stun: z.stun, col: z.bcol || '#d9a66b' }); }
     }
   }
 }
@@ -496,7 +525,7 @@ function rescueDone(r) {
   G.fx.push({ type: 'ring', x: r.x, y: r.y, r: RESCUE_R, t: 0, life: 0.45, col: COL.mint });
   if (r.member) { r.member.x = r.x; r.member.y = r.y; r.member.mode = 'follow'; G.squad.push(r.member); banner(jo(r.name, '가', '이') + ' 돌아왔다!'); return; }
   G.rescueCount++;
-  if (G.squad.length < GN.SQUAD_MAX) {
+  if (G.squad.length < G.squadMax) {
     const m = newMember(r.breed, r.name, r.x, r.y); G.squad.push(m); G.rescued.push({ breed: r.breed, name: r.name, member: m });
     banner(jo(r.name, '를', '을') + ' 구했다! 무리에 들어왔다');
   } else {
@@ -518,12 +547,12 @@ function rescuesUpdate(dt) {
   for (const r of G.rescues) {
     const d = Math.hypot(r.x - p.x, r.y - p.y);
     if (d > 1700) { const a = rand(TAU), k = rand(360, 560); r.x = p.x + Math.cos(a) * k; r.y = p.y + Math.sin(a) * k; r.prog = 0; }
-    if (d < RESCUE_R) { r.prog += dt * G.rescueSpd; if (r.prog >= r.need) rescueDone(r); }
+    if (d < RESCUE_R) { r.prog += dt * G.rescueSpd * G.p.rescueMul; if (r.prog >= r.need) rescueDone(r); }
     else r.prog = Math.max(0, r.prog - dt * 0.7);
   }
   G.rescues = G.rescues.filter(r => !r.dead);
 }
-const allyDmg = (m, base) => base * (1 + G.level * 0.035) * (1 + 0.5 * (m.stars - 1)) * (m.companion ? G.compMul : 1);
+const allyDmg = (m, base) => base * (1 + G.level * 0.035) * (1 + 0.5 * (m.stars - 1)) * (m.companion ? G.compMul : 1) * G.p.squadMul * (G.squadBuff > 0 ? 1.5 : 1);
 function allyNear(m, R) { let best = null, bd = R * R; forNear(m.x, m.y, R, e => { if (e.T.prop) return; const d = (e.x - m.x) ** 2 + (e.y - m.y) ** 2; if (d < bd) { bd = d; best = e; } }); return best; }
 function allyAct(m, dt) {
   const A = ALLY[m.breed], p = G.p; m.t -= dt;
@@ -602,23 +631,32 @@ function useSkill() {
   if (state !== 'play' || !G || G.endT >= 0) return;
   const S = G.sk, p = G.p;
   if (S.cd > 0 || p.jump || p.hide > 0) { const b = $('#btnSkill'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
-  S.max = SKILLS[S.id].cd * (1 - 0.08 * shopLv('skillcd')); S.cd = S.max; padRumble(60, 0.25);
-  const lvl = 1 + G.level * 0.03;
+  S.max = SKILLS[S.id].cd * (1 - 0.08 * shopLv('skillcd')) * p.skillMul; S.cd = S.max; padRumble(60, 0.25);
+  const lvl = 1 + G.level * 0.03, pw = 1 + 0.1 * shopLv('skillPow');
   if (S.id === 'jump') {
     const m = getMove(), d = Math.hypot(m.x, m.y), dx = d > 0.1 ? m.x / d : p.fx, dy = d > 0.1 ? m.y / d : p.fy;
-    p.jump = { t: 0, dur: 0.34, vx: dx * 470, vy: dy * 470 }; if (Math.abs(dx) > 0.15) p.face = dx > 0 ? 1 : -1; sfx('jump');
+    p.jump = { t: 0, dur: 0.34, vx: dx * 470 * pw, vy: dy * 470 * pw }; if (Math.abs(dx) > 0.15) p.face = dx > 0 ? 1 : -1; sfx('jump');
   } else if (S.id === 'hiss') {
-    const R = 170; buildGrid();
+    const R = 170 * pw; buildGrid();
     forNear(p.x, p.y, R, e => { if (e.T.prop) return; const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1; if (d > R + e.r) return; hurt(e, 6 * lvl, 'skill', dx / d * 520, dy / d * 520); if (!e.T.boss) e.stun = 1.3; });
     for (const b of G.ebul) if (Math.hypot(b.x - p.x, b.y - p.y) < 220) b.dead = true;
     G.fx.push({ type: 'ring', x: p.x, y: p.y, r: R, t: 0, life: 0.4, col: COL.salmon }, { type: 'shout', x: p.x, y: p.y, text: '하악!', t: 0, life: 0.7 });
     G.shake = 6; sfx('hiss');
+  } else if (S.id === 'purr') {
+    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25 * pw); G.squadBuff = 6 * pw; sfx('meow');
+    G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 70, t: 0, life: 0.5, col: COL.mint }, { type: 'shout', x: p.x, y: p.y, text: '골골~', t: 0, life: 0.8 }); glow(p.x, p.y, 60, COL.mint, 0.5, 0.8);
+  } else if (S.id === 'frenzy') {
+    G.frenzy = 5 * pw; sfx('lvl'); screenFlash('#bdeeb0', 0.22); G.fx.push({ type: 'shout', x: p.x, y: p.y, text: '폭주!', t: 0, life: 0.8 });
+  } else if (S.id === 'call') {
+    for (const r of G.rescues) if (r.scared && !r.dead) rescueDone(r);
+    buildGrid(); for (const m of G.squad) { const e = allyNear(m, 420); if (e) { m.mode = 'go'; m.tg = e; } }
+    G.squadBuff = Math.max(G.squadBuff, 3 * pw); sfx('meow'); G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 120, t: 0, life: 0.45, col: COL.butter }, { type: 'shout', x: p.x, y: p.y, text: '모여라!', t: 0, life: 0.8 });
   } else {
-    p.hide = 2.5; sfx('box');
+    p.hide = 2.5 * pw; sfx('box');
   }
 }
 function skillUpdate(dt) {
-  const p = G.p; G.sk.cd = Math.max(0, G.sk.cd - dt);
+  const p = G.p; G.sk.cd = Math.max(0, G.sk.cd - dt); if (G.squadBuff > 0) G.squadBuff -= dt; if (G.frenzy > 0) G.frenzy -= dt; if (G.shieldT > 0) G.shieldT -= dt;
   if (p.hide > 0) { p.hide -= dt; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.08 * dt); if (p.hide <= 0) G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 40, t: 0, life: 0.3, col: COL.mint }); }
 }
 function landJump() {
@@ -689,7 +727,7 @@ function collect(k) {
   switch (k.type) {
     case 'xp': G.xp += k.val * p.growth; sfx('pick'); break;
     case 'coin': case 'bag': gainCoins(k.val); sfx('coin'); break;
-    case 'churu': p.hp = Math.min(p.maxHp, p.hp + 30); sfx('coin'); G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 40, t: 0, life: 0.35, col: COL.mint }); break;
+    case 'churu': p.hp = Math.min(p.maxHp, p.hp + 30 * (1 + 0.2 * shopLv('healItem'))); sfx('coin'); G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 40, t: 0, life: 0.35, col: COL.mint }); break;
     case 'bell': for (const q of G.picks) if (q.type === 'xp' || q.type === 'coin' || q.type === 'bag') q.pull = true; sfx('coin'); break;
     case 'hiss': { screenFlash('#ffffff', 0.6); const vr = viewR(); for (const e of G.enemies) { if (e.dead || e.T.prop || Math.hypot(e.x - p.x, e.y - p.y) > vr) continue; hurt(e, e.heavy ? 300 : 99999, 'hiss'); }
       G.fx.push({ type: 'ring', x: p.x, y: p.y, r: vr, t: 0, life: 0.5, col: COL.salmon }); G.shake = 10; sfx('boom'); break; }
@@ -715,7 +753,7 @@ function fxUpdate(dt) {
     if (f.t >= f.life) {
       f.dead = true;
       if (f.type === 'num') G.nums--;
-      else if (f.type === 'can') boom(f.x, f.y, f.r, f.dmg, 'tuna', { coin: f.coin, col: '#4fb7c9' });
+      else if (f.type === 'can') boom(f.x, f.y, f.r, f.dmg, f.src || 'tuna', { coin: f.coin, col: f.col || '#4fb7c9' });
       else if (f.type === 'warn') { const T = ENEMIES[G.stage.dasher], e = spawn(G.stage.dasher, { x: f.x, y: f.y }); e.vx = Math.cos(f.ang) * T.spd; e.vy = Math.sin(f.ang) * T.spd; e.life = f.len / T.spd + 0.3; }
     }
   }
@@ -803,7 +841,8 @@ function achQ() {
     wlv: id => { const w = gg && gg.p.weapons.find(x => x.id === id); return w ? w.lv : 0; },
     nEvo: Object.keys(S.evolved).length, clears: S.clears, cats: save.cats.length,
     rescues: (S.rescues || 0) + (g ? g.rescueCount : 0), squad: gg ? gg.squad.length : 0,
-    adopted: save.home.adopted.length, furn: Object.keys(save.home.furn).length, bond: Math.max(0, ...save.home.cats.map(c => c.bond)) };
+    adopted: save.home.adopted.length, furn: Object.keys(save.home.furn).length, bond: Math.max(0, ...save.home.cats.map(c => c.bond)),
+    home: save.home.cats.length, runs: S.runs, shopLv: Object.values(save.shop).reduce((a, b) => a + b, 0), played: Object.keys(S.best).length };
 }
 function rewardText(a) {
   const out = [], r = a.rw;
@@ -840,9 +879,9 @@ function update(dt) {
   const m = getMove(); p.moving = !!(m.x || m.y) && !p.jump && !(p.hide > 0);
   if (p.jump) { const J = p.jump; J.t += dt; p.x += J.vx * dt; p.y += J.vy * dt; if (J.t >= J.dur) { p.jump = null; landJump(); } }
   else if (p.moving) { p.x += m.x * p.spd * dt; p.y += m.y * p.spd * dt; const d = Math.hypot(m.x, m.y); p.fx = m.x / d; p.fy = m.y / d; if (Math.abs(m.x) > 0.15) p.face = m.x > 0 ? 1 : -1; }
-  p.inv -= dt; if (p.regen) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+  p.inv -= dt; if (p.regen) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt); if (p.stillRegen && !p.moving) p.hp = Math.min(p.maxHp, p.hp + p.stillRegen * dt);
   G.shake *= Math.exp(-6 * dt); if (G.freeze > 0) G.freeze -= dt;
-  spawnUpdate(dt); buildGrid(); enemiesUpdate(dt); weaponsUpdate(dt); skillUpdate(dt); squadUpdate(dt); rescuesUpdate(dt); shotsUpdate(dt); zonesUpdate(dt); picksUpdate(dt); fxUpdate(dt); partsUpdate(dt);
+  spawnUpdate(dt); buildGrid(); enemiesUpdate(dt); weaponsUpdate(dt); CUR.id = null; skillUpdate(dt); squadUpdate(dt); rescuesUpdate(dt); shotsUpdate(dt); zonesUpdate(dt); picksUpdate(dt); fxUpdate(dt); partsUpdate(dt);
   G.enemies = G.enemies.filter(e => !e.dead); G.shots = G.shots.filter(s => !s.dead); G.zones = G.zones.filter(z => !z.dead);
   G.picks = G.picks.filter(k => !k.dead); G.fx = G.fx.filter(f => !f.dead); G.ebul = G.ebul.filter(b => !b.dead);
   G.achT -= dt; if (G.achT <= 0) { G.achT = 1; checkAchs(); }
@@ -869,8 +908,8 @@ function render(now) {
 
   for (const z of G.zones) {
     if (!inView(z.x, z.y, 120)) continue;
-    if (z.kind === 'puddle') { const k = Math.min(1, (z.max - z.life) / 0.2, z.life / 0.3); c.globalAlpha = 0.8 * k; pen(c, 1.2); ell(c, z.x, z.y, z.r * k, z.r * k * 0.72, z.slow ? '#e9f4ff' : '#ffffff'); c.globalAlpha = 1; }
-    else drawIco(c, 'boxtrap', z.x, z.y, 34);
+    if (z.kind === 'puddle') { const k = Math.min(1, (z.max - z.life) / 0.2, z.life / 0.3); c.globalAlpha = (z.col ? 0.5 : 0.8) * k; pen(c, 1.2); ell(c, z.x, z.y, z.r * k, z.r * k * 0.72, z.col || (z.slow ? '#e9f4ff' : '#ffffff')); c.globalAlpha = 1; }
+    else drawIco(c, z.ico || 'boxtrap', z.x, z.y, 34);
   }
   for (const f of G.fx) {
     if (f.type === 'warn') { const a = 0.25 + 0.25 * Math.sin(f.t * 22); c.save(); c.translate(f.x, f.y); c.rotate(f.ang); c.fillStyle = `rgba(255,107,107,${a})`; c.fillRect(0, -17, f.len, 34); c.restore(); }
@@ -884,10 +923,12 @@ function render(now) {
   { const js = p.jump ? 1 - Math.sin(Math.PI * p.jump.t / p.jump.dur) * 0.45 : 1; c.beginPath(); c.ellipse(p.x, p.y + 13, 13 * js, 4.5 * js, 0, 0, TAU); c.fill(); }
   for (const m of G.squad) { c.beginPath(); c.ellipse(m.x, m.y + 9.5, 9.5, 3.4, 0, 0, TAU); c.fill(); }
 
+  if (G.frenzy > 0) { c.globalAlpha = 0.5 + 0.3 * Math.sin(gt * 14); c.strokeStyle = '#7fdc6a'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y, 26, 0, TAU); c.stroke(); c.globalAlpha = 1; }
   for (const w of p.weapons) {
     const S = w.S;
-    if (w.id === 'purr') { const R = 62 * S.area; c.globalAlpha = 0.16 + 0.05 * Math.sin(gt * 6); dot(c, p.x, p.y, R, COL.mint); c.globalAlpha = 0.6; c.strokeStyle = COL.mint; c.lineWidth = 2.5; c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.stroke(); c.globalAlpha = 1; }
-    else if (w.id === 'laser') { const L = 170 * S.area; c.lineCap = 'round'; for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU, x2 = p.x + Math.cos(a) * L, y2 = p.y + Math.sin(a) * L, col = S.rainbow ? RAINBOW[i % 5] : '#ff6b6b'; c.globalAlpha = 0.55; c.strokeStyle = col; c.lineWidth = 9; line(c, p.x, p.y, x2, y2); c.globalAlpha = 1; c.strokeStyle = '#fff'; c.lineWidth = 2.5; line(c, p.x, p.y, x2, y2); dot(c, x2, y2, 6, col); } }
+    const K = WEAPONS[w.id].kind || w.id, AC = WEAPONS[w.id].aura || COL.mint;
+    if (K === 'purr') { const R = 62 * S.area; c.globalAlpha = 0.16 + 0.05 * Math.sin(gt * 6); dot(c, p.x, p.y, R, AC); c.globalAlpha = 0.6; c.strokeStyle = AC; c.lineWidth = 2.5; c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.stroke(); c.globalAlpha = 1; }
+    else if (K === 'laser') { const L = 170 * S.area; c.lineCap = 'round'; for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU, x2 = p.x + Math.cos(a) * L, y2 = p.y + Math.sin(a) * L, col = S.rainbow ? RAINBOW[i % 5] : (WEAPONS[w.id].beamCol || '#ff6b6b'); c.globalAlpha = 0.55; c.strokeStyle = col; c.lineWidth = 9; line(c, p.x, p.y, x2, y2); c.globalAlpha = 1; c.strokeStyle = '#fff'; c.lineWidth = 2.5; line(c, p.x, p.y, x2, y2); dot(c, x2, y2, 6, col); } }
   }
 
   const list = G.enemies; list.sort((a, b) => a.y - b.y);
@@ -922,16 +963,17 @@ function render(now) {
 
   for (const w of p.weapons) {
     const S = w.S;
-    if (w.id === 'yarn') { const R = 74 * S.area, sz = 36 * Math.sqrt(S.area); for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU; drawIco(c, 'yarn', p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, sz, a * 2); } }
-    else if (w.id === 'kitten') for (const k of w.pets) { c.save(); c.translate(k.x, k.y); c.scale(k.face, 1); c.drawImage(icoSprite('kitten'), -13, -13, 26, 26); c.restore(); }
+    const K = WEAPONS[w.id].kind || w.id;
+    if (K === 'yarn') { const R = 74 * S.area, sz = 36 * Math.sqrt(S.area); for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU; drawIco(c, w.id, p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, sz, a * 2); } }
+    else if (K === 'kitten') for (const k of w.pets) { c.save(); c.translate(k.x, k.y); c.scale(k.face, 1); c.drawImage(icoSprite(w.id), -13, -13, 26, 26); c.restore(); }
   }
   drawParts(c, inView);
   for (const s of G.shots) {
     if (s.kind === 'hair') drawIco(c, s.ico || 'hairball', s.x, s.y, s.r * (s.ico === 'fishbone' ? 4.4 : 3.6), s.ico === 'fishbone' ? Math.atan2(s.vy, s.vx) : gt * 10);
-    else if (s.kind === 'bone') drawIco(c, 'fishbone', s.x, s.y, s.r * 3.2, s.rot);
-    else if (s.kind === 'lob') drawIco(c, 'bowl', s.x, s.y, s.r * 3.2, s.rot);
-    else if (s.kind === 'ball') drawIco(c, 'ball', s.x, s.y, s.r * 3.6, s.rot);
-    else drawIco(c, 'sardine', s.x, s.y, 34, Math.atan2(s.vy, s.vx));
+    else if (s.kind === 'bone') drawIco(c, s.ico || 'fishbone', s.x, s.y, s.r * 3.2, s.rot);
+    else if (s.kind === 'lob') drawIco(c, s.ico || 'bowl', s.x, s.y, s.r * 3.2, s.rot);
+    else if (s.kind === 'ball') drawIco(c, s.ico || 'ball', s.x, s.y, s.r * 3.6, s.rot);
+    else drawIco(c, s.ico || 'sardine', s.x, s.y, 34, Math.atan2(s.vy, s.vx));
   }
   c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.6; for (const b of G.ebul) c.drawImage(glowSprite('#ff5a5a'), b.x - 18, b.y - 18, 36, 36); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
   pen(c, 1.3);
@@ -967,7 +1009,7 @@ function render(now) {
     } else if (f.type === 'shout') {
       c.save(); c.globalAlpha = 1 - q * q; c.font = (24 + q * 10) + 'px Jua, sans-serif'; c.textAlign = 'center'; c.lineJoin = 'round'; c.lineWidth = 6; c.strokeStyle = INK; c.strokeText(f.text, f.x, f.y - 36 - q * 24); c.fillStyle = COL.butter; c.fillText(f.text, f.x, f.y - 36 - q * 24); c.restore();
     } else if (f.type === 'puff') { c.globalAlpha = 1 - q; dot(c, f.x, f.y, f.r * (1 - q * 0.5), '#fff'); c.globalAlpha = 1; }
-    else if (f.type === 'can') drawIco(c, 'tuna', f.x, f.y - (1 - q) * 260, 38, q * 5);
+    else if (f.type === 'can') drawIco(c, f.ico || 'tuna', f.x, f.y - (1 - q) * 260, 38, q * 5);
   }
   c.textAlign = 'center'; c.lineJoin = 'round'; c.textBaseline = 'alphabetic';
   for (const f of G.fx) if (f.type === 'num') { const pop = 1 + 0.6 * Math.max(0, 1 - f.t / 0.1); c.save(); c.translate(f.x, f.y); c.scale(pop, pop); c.font = (f.crit ? 21 : 15) + 'px Jua, sans-serif'; c.globalAlpha = 1 - (f.t / f.life) ** 2; c.lineWidth = 4; c.strokeStyle = INK; c.strokeText(f.n, 0, 0); c.fillStyle = f.crit ? COL.butter : '#fff'; c.fillText(f.n, 0, 0); c.restore(); }
@@ -999,7 +1041,7 @@ function render(now) {
 const hudCache = {};
 function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
 function updateHud() {
-  setText('#timer', fmtTime(G.t)); setText('#kills', '처치 ' + num(G.kills)); setText('#coins', '동전 ' + num(G.coins)); setText('#lvl', 'Lv ' + G.level); setText('#squadPill', `무리 ${G.squad.length}/${GN.SQUAD_MAX}`);
+  setText('#timer', fmtTime(G.t)); setText('#kills', '처치 ' + num(G.kills)); setText('#coins', '동전 ' + num(G.coins)); setText('#lvl', 'Lv ' + G.level); setText('#squadPill', `무리 ${G.squad.length}/${G.squadMax}`);
   const w = Math.round(G.xp / G.need * 100) + '%'; if (hudCache.xp !== w) { hudCache.xp = w; $('#xpfill').style.width = w; }
   const S = G.sk, pr = S.cd > 0 ? (S.cd / S.max).toFixed(3) : '0';
   if (hudCache.skp !== pr) { hudCache.skp = pr; const b = $('#btnSkill'); b.style.setProperty('--p', pr); b.classList.toggle('ready', S.cd <= 0); }
@@ -1021,7 +1063,12 @@ function renderSlots() {
 /* ───────── the hideout and adoption ───────── */
 const FURN = GN.FURN;
 const hasF = id => !!save.home.furn[id];
-const homeCap = () => GN.HOME_CAP + (hasF('tower') ? 3 : 0) + (hasF('house') ? 3 : 0);
+const homeCap = () => GN.HOME_CAP + (hasF('tower') ? 3 : 0) + (hasF('house') ? 3 : 0) + (hasF('hammock') ? 3 : 0) + (hasF('cabin') ? 3 : 0);
+const snackCost = () => hasF('feeder') ? Math.round(GN.SNACK_COST / 2) : GN.SNACK_COST;
+/* the first twelve cats live indoors, the rest in the yard */
+const LIVING = 12; let homeRoom = 'in';
+const roomCats = () => homeRoom === 'in' ? save.home.cats.slice(0, LIVING) : save.home.cats.slice(LIVING);
+function pickCat(uid) { homeSel = uid; const i = save.home.cats.findIndex(c => c.uid === uid); if (i >= 0) homeRoom = i >= LIVING ? 'out' : 'in'; }
 const bondStars = b => b >= 4 ? 3 : b >= 2 ? 2 : 1;
 let homeTab = 'c', homeSel = null;
 /* after a run: rescued cats move in, everyone who stayed home gets closer */
@@ -1051,6 +1098,8 @@ function openHome() { state = 'menu'; refreshHome(); show('#ovHome'); }
 function refreshHome() {
   const H = save.home, cap = homeCap(), comp = H.cats.find(c => c.uid === H.companion);
   for (const k of ['c', 'f', 'a']) $('#tabH' + k.toUpperCase()).classList.toggle('sel', homeTab === k);
+  const nIn = Math.min(LIVING, H.cats.length); $('#roomIn').textContent = `거실 ${nIn}`; $('#roomOut').textContent = `마당 ${H.cats.length - nIn}`;
+  $('#roomIn').classList.toggle('sel', homeRoom === 'in'); $('#roomOut').classList.toggle('sel', homeRoom === 'out');
   $('#homeSub').textContent = `고양이 ${H.cats.length}/${cap} · 입양 보낸 고양이 ${H.adopted.length}마리 · 함께 나갈 고양이: ${comp ? comp.name : '없음'}`;
   $('#wallet4').textContent = num(save.coins);
   const box = $('#homeList'); box.textContent = '';
@@ -1065,17 +1114,17 @@ function refreshHome() {
       m.appendChild(el('div', 'ev', `함께 나가면 ${'★'.repeat(bondStars(cat.bond))}`)); r.appendChild(m);
       const acts = el('div', 'acts'), fed = cat.fed === save.stats.runs, full = cat.bond >= GN.BOND_MAX;
       if (full) acts.appendChild(btn('입양 보내기', 'adopt', () => openAdopt(cat)));
-      else acts.appendChild(btn(fed ? '간식 먹음' : `간식 · 동전 ${GN.SNACK_COST}`, '', () => {
-        if (save.coins < GN.SNACK_COST || cat.fed === save.stats.runs) return;
-        save.coins -= GN.SNACK_COST; cat.bond = Math.min(GN.BOND_MAX, cat.bond + 1); cat.fed = save.stats.runs; homeSel = cat.uid; GN.room.pop(cat.uid); initAudio(); sfx('coin'); writeSave(); checkAchs(); refreshHome();
-      }, fed || save.coins < GN.SNACK_COST));
-      acts.appendChild(btn(cat.uid === H.companion ? '함께 나감' : '함께 나가기', cat.uid === H.companion ? 'sel' : '', () => { H.companion = H.companion === cat.uid ? null : cat.uid; homeSel = cat.uid; writeSave(); refreshHome(); }));
+      else acts.appendChild(btn(fed ? '간식 먹음' : `간식 · 동전 ${snackCost()}`, '', () => {
+        if (save.coins < snackCost() || cat.fed === save.stats.runs) return;
+        save.coins -= snackCost(); cat.bond = Math.min(GN.BOND_MAX, cat.bond + 1); cat.fed = save.stats.runs; pickCat(cat.uid); GN.room.pop(cat.uid); initAudio(); sfx('coin'); writeSave(); checkAchs(); refreshHome();
+      }, fed || save.coins < snackCost()));
+      acts.appendChild(btn(cat.uid === H.companion ? '함께 나감' : '함께 나가기', cat.uid === H.companion ? 'sel' : '', () => { H.companion = H.companion === cat.uid ? null : cat.uid; pickCat(cat.uid); writeSave(); refreshHome(); }));
       r.appendChild(acts); box.appendChild(r);
     }
   } else if (homeTab === 'f') {
     for (const id of Object.keys(FURN)) {
       const F = FURN[id], own = hasF(id), r = el('div', 'item'); r.appendChild(mkIcon(F.icon, 40));
-      const m = el('div'); m.appendChild(el('div', 'nm', F.name)); m.appendChild(el('div', 'ds', F.desc)); r.appendChild(m);
+      const m = el('div'); m.appendChild(el('div', 'nm', F.name)); m.appendChild(el('div', 'ds', F.desc)); m.appendChild(el('div', 'ev', F.room === 'out' ? '마당' : '거실')); r.appendChild(m);
       r.appendChild(own ? el('span', 'state ok', '들여놓음') : btn(`동전 ${num(F.cost)}`, '', () => { if (save.coins < F.cost || hasF(id)) return; save.coins -= F.cost; save.home.furn[id] = 1; initAudio(); sfx('box'); writeSave(); checkAchs(); refreshHome(); }, save.coins < F.cost));
       box.appendChild(r);
     }
@@ -1112,7 +1161,7 @@ function drawHomeCanvases(now) {
   const t = now / 1000, dt = Math.min(0.05, (now - roomLast) / 1000); roomLast = now;
   if (!$('#ovHome').hidden) {
     const cv2 = $('#roomCv'), { w, h, d } = fitCanvas(cv2); if (!w) return; const c = cv2.getContext('2d');
-    c.setTransform(d * w / GN.room.VW, 0, 0, d * h / GN.room.VH, 0, 0); GN.room.draw(c, save.home.cats, save.home.furn, t, homeSel, dt);
+    c.setTransform(d * w / GN.room.VW, 0, 0, d * h / GN.room.VH, 0, 0); GN.room.draw(c, roomCats(), save.home.furn, t, homeSel, dt, homeRoom);
   }
   if (!$('#ovAdopt').hidden && adoptCat) {
     const cv2 = $('#adoptCv'), { w, h, d } = fitCanvas(cv2); if (!w) return; const c = cv2.getContext('2d');
@@ -1250,7 +1299,7 @@ function pickChoice(i) {
 /* chest */
 function openBox() {
   state = 'box'; const p = G.p, items = [];
-  const r = Math.random(), n = r < 0.04 * p.luck ? 5 : r < 0.04 * p.luck + 0.22 * p.luck ? 3 : 1;
+  const bl = 1 + 0.25 * shopLv('boxLuck'), r = Math.random(), n = r < 0.04 * p.luck * bl ? 5 : r < 0.26 * p.luck * bl ? 3 : 1;
   for (let i = 0; i < n; i++) {
     const evo = p.weapons.find(w => !w.evo && w.lv >= WMAX && plv(WEAPONS[w.id].evo.needs) > 0);
     if (evo) { evo.evo = true; evo.t = 0; save.stats.evolved[evo.id] = true; items.push({ icon: evo.id, name: WEAPONS[evo.id].evo.name, desc: '진화! ' + WEAPONS[evo.id].evo.desc, evo: true }); continue; }
@@ -1426,8 +1475,8 @@ on('#btnShop', () => { state = 'menu'; refreshShop(); show('#ovShop'); }); on('#
 on('#btnBook', () => { state = 'menu'; refreshBook(); show('#ovBook'); }); on('#btnBookBack', toTitle);
 on('#btnHideout', () => { homeSel = null; openHome(); }); on('#btnHomeBack', toTitle);
 for (const k of ['c', 'f', 'a']) on('#tabH' + k.toUpperCase(), () => { homeTab = k; refreshHome(); });
-on('#btnAdoptOk', confirmAdopt); on('#btnAdoptNo', () => { adoptCat = null; openHome(); });
-$('#roomCv').addEventListener('click', e => { const r = e.currentTarget.getBoundingClientRect(), uid = GN.room.hit(save.home.cats, save.home.furn, (e.clientX - r.left) / r.width * GN.room.VW, (e.clientY - r.top) / r.height * GN.room.VH);
+on('#btnAdoptOk', confirmAdopt); on('#roomIn', () => { homeRoom = 'in'; refreshHome(); }); on('#roomOut', () => { homeRoom = 'out'; refreshHome(); }); on('#btnAdoptNo', () => { adoptCat = null; openHome(); });
+$('#roomCv').addEventListener('click', e => { const r = e.currentTarget.getBoundingClientRect(), uid = GN.room.hit(roomCats(), save.home.furn, (e.clientX - r.left) / r.width * GN.room.VW, (e.clientY - r.top) / r.height * GN.room.VH, homeRoom);
   if (uid == null) return; homeSel = uid; homeTab = 'c'; GN.room.pop(uid); refreshHome(); const row = document.querySelector(`#homeList [data-uid="${uid}"]`); if (row) row.scrollIntoView({ block: 'nearest', behavior: REDUCED ? 'auto' : 'smooth' }); });
 for (const k of ['w', 'p', 'e']) on('#tab' + k.toUpperCase(), () => { bookTab = k; refreshBook(); });
 on('#btnAch', () => { state = 'menu'; refreshAch(); show('#ovAch'); }); on('#btnAchBack', toTitle);

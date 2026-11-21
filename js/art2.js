@@ -67,45 +67,54 @@ const LOOK2 = {
   kit: { fur: '#d9c2a3', belly: '#ffffff', muzzle: '#ffffff', socks: '#ffffff', ear: '#d9c2a3', eye: '#8ccf5a', small: 0.8 },
   gold: { fur: '#ffd447', belly: '#fff6c9', muzzle: '#fff6c9', socks: '#fff6c9', ear: '#ffd447', stripes: '#e0ad1c', eye: '#f08a3c' },
 };
-function leg(c, x, y, col, sock) {
-  rr(c, x - 2.5, y - 4.5, 5, 7, 2.3); c.fillStyle = col; c.fill(); ol(c, col);
+function leg(c, x, y, col, sock, short) {
+  if (short) rr(c, x - 2.5, y - 1.5, 5, 4, 2); else rr(c, x - 2.5, y - 4.5, 5, 7, 2.3); c.fillStyle = col; c.fill(); ol(c, col);
   E(c, x + 0.6, y + 2.7, 3.3, 2.1, sock || col, 0, true);
   L(c, 'rgba(42,35,48,.45)', 0.6, x - 0.2, y + 2.6, x - 0.2, y + 4.2); L(c, 'rgba(42,35,48,.45)', 0.6, x + 1.6, y + 2.6, x + 1.6, y + 4.2);
 }
 function drawCat(c, K, t, moving) {
   const k = K.small || 1, fat = K.fat || 1; c.save(); c.scale(k, k);
-  const fur = K.fur, bob = moving ? sin(t * 14) * 1.2 : sin(t * 3) * 0.5, st = moving ? sin(t * 14) * 3.2 : 0, hy = bob;
+  const fur = K.fur, dy = K.short ? 3 : 0, bob = moving ? sin(t * 14) * 1.2 : sin(t * 3) * 0.5, st = moving ? sin(t * 14) * (K.short ? 2 : 3.2) : 0, hy = bob + dy;
   const legCol = K.points || fur, far = shade(legCol, -0.22), tw = sin(t * (moving ? 9 : 4)) * 3;
-  const tailCol = K.points || (K.patches ? '#484852' : fur), by = 3 + bob * 0.3, bry = 8.6 * (1 + (fat - 1) * 0.5);
+  const tailCol = K.points || (K.patches ? '#484852' : fur), by = 3 + bob * 0.3 + dy, bry = 8.6 * (1 + (fat - 1) * 0.5);
   // tail
-  c.beginPath(); c.moveTo(-11 * fat, 4); c.bezierCurveTo(-21 * fat, 6, -25 * fat, -4 + tw, -19 * fat, -13 + tw * 0.5); tube(c, tailCol, K.bald ? 2.2 : 4);
+  c.save(); c.translate(0, dy);
+  c.beginPath(); c.moveTo(-11 * fat, 4); c.bezierCurveTo(-21 * fat, 6, -25 * fat, -4 + tw, -19 * fat, -13 + tw * 0.5); tube(c, tailCol, K.bald ? 2.2 : K.fluff ? 6 : 4);
   if (K.stripes) { L(c, K.stripes, 1.4, -16.5 * fat, 2.8, -17.5 * fat, 6.6); L(c, K.stripes, 1.4, -20.4 * fat, -1 + tw * 0.5, -23.8 * fat, 0.6 + tw * 0.5); L(c, K.stripes, 1.4, -19.8 * fat, -7.5 + tw * 0.6, -23 * fat, -8.4 + tw * 0.6); }
   if (K.tip) B(c, -19 * fat, -13 + tw * 0.5, 2, 2, K.tip);
+  c.restore();
   // far legs
-  leg(c, -9 - st, 8, far, K.socks ? shade(K.socks, -0.14) : null); leg(c, 4.5 + st, 8, far, K.socks ? shade(K.socks, -0.14) : null);
+  leg(c, -9 - st, 8, far, K.socks ? shade(K.socks, -0.14) : null, K.short); leg(c, 4.5 + st, 8, far, K.socks ? shade(K.socks, -0.14) : null, K.short);
   // body
   E(c, -3, by, 12 * fat, bry, fur);
   clipE(c, -3, by, 12 * fat - 0.6, bry - 0.6, 0, () => {
     if (K.belly) B(c, -1, by + 7.5, 10 * fat, 4.6, K.belly);
     if (K.patches) { B(c, -10, by - 4, 6.5, 5.5, '#484852', 0.4); B(c, 1, by - 6, 5.5, 4, '#f6a94a'); B(c, -3, by + 7, 4, 3, '#f6a94a'); }
     if (K.stripes) { L(c, K.stripes, 1.7, -10.5, by - 9, -9.6, by - 2.6); L(c, K.stripes, 1.7, -6.4, by - 10, -6, by - 3.6); L(c, K.stripes, 1.7, -2.2, by - 10, -2.2, by - 4.4); }
+    if (K.spots) for (const [x, y, r] of [[-11, -3, 2], [-6.5, -6, 1.7], [-2, -2.5, 2.1], [-8, 2, 1.6], [2, -6.5, 1.5], [-13, 3, 1.4], [3, 0, 1.3]]) B(c, x, by + y, r * 1.1, r, K.spots, 0.3);
     if (K.bald) { L(c, shade(fur, -0.2), 0.8, -9, by - 3, -6, by - 1); L(c, shade(fur, -0.2), 0.8, -4, by - 4, -1, by - 2); L(c, shade(fur, -0.2), 0.8, -8, by + 2, -4, by + 3); }
   });
   // chest fluff
   if (K.belly) flat(c, K.belly, 3.5, by - 3, 8.6, by + 0.4, 6.2, by + 1.6, 8.4, by + 4.2, 5, by + 5.2, 2.4, by + 2);
+  if (K.fluff) poly(c, K.belly || shade(fur, 0.18), 1.5, by - 6, 11, by - 3.5, 8.6, by - 0.8, 11.4, by + 2, 7.6, by + 3.6, 9, by + 6.6, 3.4, by + 4);
   // near legs
-  leg(c, -6 + st, 9, legCol, K.socks); leg(c, 6.5 - st, 9, legCol, K.socks);
+  leg(c, -6 + st, 9, legCol, K.socks, K.short); leg(c, 6.5 - st, 9, legCol, K.socks, K.short);
   // ears (a clipped far ear marks a neutered street cat)
   const earL = K.patches ? '#484852' : K.ear;
+  if (K.fold) { poly(c, earL, -1.6, -11.5 + hy, 1.4, -16.2 + hy, 5.2, -13.4 + hy, 2.6, -12 + hy); poly(c, K.ear, 10.4, -14 + hy, 14.6, -16.4 + hy, 16.2, -11.8 + hy, 13, -12.4 + hy); }
+  else {
   if (K.tnr) poly(c, earL, -3, -10 + hy, -1.8, -17.8 + hy, 1.4, -19 + hy, 6, -14 + hy); else poly(c, earL, -3, -10 + hy, -1, -21 + hy, 6, -14 + hy);
   flat(c, '#ffb3bd', -1.3, -12 + hy, -0.6, -17 + hy, 3.4, -14 + hy);
   poly(c, K.ear, 9, -14 + hy, 15.5, -21 + hy, 17, -9.5 + hy); flat(c, '#ffb3bd', 11, -13.6 + hy, 15, -18.6 + hy, 15.8, -11.5 + hy);
+  }
   // cheek tuft, head
   if (!K.bald) poly(c, fur, 17.2, -5 + hy, 20.6, -2 + hy, 16.4, -0.4 + hy);
+  if (K.fluff) { poly(c, fur, 17.4, -8 + hy, 22.4, -4.6 + hy, 18.6, -3 + hy, 21.6, 0.6 + hy, 16, 0.8 + hy); poly(c, fur, -3, -8 + hy, -7.4, -4 + hy, -3.6, -2.6 + hy, -6, 0.6 + hy, -1.6, 1 + hy); }
   E(c, 7, -5.5 + hy, 11, 9.6, fur);
   clipE(c, 7, -5.5 + hy, 10.4, 9, 0, () => {
     if (K.patches) { B(c, 0, -12 + hy, 6.5, 6.5, '#484852'); B(c, 15, -12 + hy, 6.5, 6.5, '#f6a94a'); }
     if (K.points) B(c, 8.5, -2.5 + hy, 7.5, 6.5, K.points);
+    if (K.spots) for (const [x, y, r] of [[3, -13, 1.2], [9, -14, 1.1], [14, -12, 1.2], [1, -9, 0.9]]) B(c, x, y + hy, r, r * 0.85, K.spots);
     if (K.muzzle) B(c, 8.6, 1 + hy, 7.6, 5.4, K.muzzle);
     if (K.stripes) { L(c, K.stripes, 1.4, 5.2, -15 + hy, 5.8, -11.8 + hy); L(c, K.stripes, 1.4, 8.6, -15.6 + hy, 8.6, -11.8 + hy); L(c, K.stripes, 1.4, 12, -15 + hy, 11.4, -11.8 + hy); L(c, K.stripes, 1.2, -3, -6.4 + hy, -0.2, -5.4 + hy); L(c, K.stripes, 1.2, 19.6, -6.4 + hy, 17, -5.4 + hy); }
     if (K.bald) { L(c, shade(fur, -0.2), 0.8, 4.6, -13 + hy, 7.4, -12.2 + hy); L(c, shade(fur, -0.2), 0.8, 9.6, -12.2 + hy, 12.6, -13 + hy); L(c, shade(fur, -0.2), 0.8, 6, -10.8 + hy, 11, -10.8 + hy); }
@@ -552,5 +561,6 @@ function install() {
   for (const id in LOOK2) if (GN.CATS[id]) GN.CATS[id].look = LOOK2[id];
 }
 
-GN.art2 = { ST, shade, drawCat, LOOK2, ART: ART2, install };
+GN.art2 = { ST, shade, drawCat, LOOK2, ART: ART2, install,
+  h: { E, S, B, poly, flat, L, limb, tube, clipE, eye, brows, rr, speed, birdLegs, wheel, dleg, leg, ol, DARK, PINK, ORG } };
 })();

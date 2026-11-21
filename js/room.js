@@ -72,6 +72,55 @@ const FURN_DRAW = {
 };
 const BACK_TO_FRONT = ['plant', 'tower', 'house', 'scratcher', 'toy', 'cushion', 'bowl'];
 
+/* ───────── the yard: second space for the hideout ───────── */
+function yardShell(c, t) {
+  const g = c.createLinearGradient(0, 0, 0, 96); g.addColorStop(0, '#bfe3ff'); g.addColorStop(1, '#e6f4ff'); c.fillStyle = g; c.fillRect(0, 0, VW, 96);
+  const cx = 40 + ((t * 5) % 520) - 40; c.fillStyle = '#ffffff'; for (const [dx, dy, r] of [[0, 30, 11], [14, 24, 14], [30, 30, 11]]) { c.beginPath(); c.arc(cx + dx, dy, r, 0, TAU); c.fill(); }
+  c.fillStyle = '#ffe58a'; c.beginPath(); c.arc(452, 30, 14, 0, TAU); c.fill();
+  // fence
+  for (let x = 6; x < VW; x += 26) { rr(c, x, 58, 18, 48, 5); fillInk(c, '#fff6ea', 1.1); }
+  rr(c, 0, 72, VW, 7, 2); fillInk(c, '#fff6ea', 1.1); rr(c, 0, 92, VW, 7, 2); fillInk(c, '#fff6ea', 1.1);
+  // lawn and path
+  c.fillStyle = '#9fd88a'; c.fillRect(0, 104, VW, VH - 104); seg(c, INK, 1.3, 0, 104, VW, 104);
+  c.fillStyle = '#8cc977'; for (let i = 0; i < 26; i++) { const x = (i * 97) % VW, y = 116 + (i * 53) % 90; c.beginPath(); c.ellipse(x, y, 14, 5, 0, 0, TAU); c.fill(); }
+  c.fillStyle = '#e8d6ae'; c.beginPath(); c.ellipse(250, 186, 70, 14, 0, 0, TAU); c.fill(); c.fillStyle = '#d9c497'; for (const [x, y] of [[214, 184], [244, 190], [276, 182], [300, 189]]) { c.beginPath(); c.ellipse(x, y, 9, 4, 0, 0, TAU); c.fill(); }
+}
+const YARD_DRAW = {
+  hammock(c, t) {
+    rr(c, 22, 60, 12, 128, 3); fillInk(c, '#8a5a36'); rr(c, 160, 60, 12, 128, 3); fillInk(c, '#8a5a36');
+    c.beginPath(); c.ellipse(28, 54, 30, 22, 0, 0, TAU); fillInk(c, '#7fc96a'); c.beginPath(); c.ellipse(166, 54, 30, 22, 0, 0, TAU); fillInk(c, '#7fc96a');
+    const sw = sin(t * 1.2) * 3; c.beginPath(); c.moveTo(34, 104); c.quadraticCurveTo(97, 150 + sw, 160, 104); c.quadraticCurveTo(97, 132 + sw, 34, 104); fillInk(c, '#ff9f43');
+  },
+  cabin(c) {
+    poly(c, '#8a5a36', 328, 128, 372, 96, 416, 128); rr(c, 334, 126, 76, 60, 2); fillInk(c, '#c98f5a');
+    c.strokeStyle = '#a8743f'; c.lineWidth = 1; c.beginPath(); for (let y = 138; y < 186; y += 12) { c.moveTo(334, y); c.lineTo(410, y); } c.stroke();
+    c.beginPath(); c.arc(372, 170, 13, Math.PI, 0); c.lineTo(385, 186); c.lineTo(359, 186); c.closePath(); fillInk(c, '#5a4636');
+  },
+  fountain(c, t) {
+    c.beginPath(); c.ellipse(250, 150, 40, 12, 0, 0, TAU); fillInk(c, '#cfd6e6'); c.beginPath(); c.ellipse(250, 148, 32, 8, 0, 0, TAU); c.fillStyle = '#9fd8ff'; c.fill();
+    rr(c, 246, 116, 8, 32, 2); fillInk(c, '#cfd6e6');
+    c.strokeStyle = '#7cc4ff'; c.lineWidth = 2; for (const k of [-1, 1]) { c.beginPath(); c.moveTo(250, 116); c.quadraticCurveTo(250 + k * 18, 96 + sin(t * 4) * 2, 250 + k * 26, 146); c.stroke(); }
+  },
+  feeder(c) { rr(c, 440, 140, 24, 30, 4); fillInk(c, '#cfeaff'); c.beginPath(); c.arc(452, 152, 7, 0, TAU); c.fillStyle = '#d19a5b'; c.fill(); rr(c, 432, 168, 40, 14, 4); fillInk(c, '#7cc4ff'); },
+  tunnel(c) { c.beginPath(); c.ellipse(120, 186, 46, 16, 0, 0, TAU); fillInk(c, '#b79cff'); c.beginPath(); c.ellipse(80, 186, 9, 14, 0, 0, TAU); fillInk(c, '#5a4a7a'); c.strokeStyle = '#9a80e0'; c.lineWidth = 1.2; for (const x of [100, 120, 140]) { c.beginPath(); c.ellipse(x, 186, 3, 15, 0, -1.5, 1.5); c.stroke(); } },
+  flowerbed(c, t) {
+    rr(c, 190, 112, 120, 18, 4); fillInk(c, '#a8743f');
+    for (let i = 0; i < 9; i++) { const x = 200 + i * 13, col = ['#ff9fb0', '#ffd84d', '#ffffff'][i % 3], sw = sin(t * 2 + i) * 1.4; seg(c, '#5fa851', 1.6, x, 114, x + sw, 100); for (let k = 0; k < 5; k++) { c.beginPath(); c.arc(x + sw + cos(k * 1.257) * 3, 98 + sin(k * 1.257) * 3, 2.4, 0, TAU); c.fillStyle = col; c.fill(); } }
+  },
+  parasol(c) {
+    seg(c, INK, 2.6, 400, 70, 404, 150); c.beginPath(); c.moveTo(358, 78); c.quadraticCurveTo(402, 36, 446, 78); c.closePath(); fillInk(c, '#ff8a7a');
+    c.save(); c.clip(); c.fillStyle = '#ffffff'; c.fillRect(384, 30, 10, 50); c.fillRect(410, 30, 10, 50); c.restore();
+    rr(c, 372, 148, 60, 10, 3); fillInk(c, '#fff6ea');
+  },
+};
+const YARD_ORDER = ['hammock', 'cabin', 'flowerbed', 'fountain', 'parasol', 'feeder', 'tunnel'];
+const SPOTS_OUT = [
+  { need: 'hammock', x: 96, y: 118, sleep: true }, { need: 'cabin', x: 372, y: 200 }, { need: 'parasol', x: 400, y: 136 }, { need: 'fountain', x: 214, y: 150 },
+  { need: null, x: 60, y: 160 }, { need: null, x: 150, y: 150 }, { need: null, x: 290, y: 168 }, { need: null, x: 470, y: 120 },
+  { need: null, x: 196, y: 196 }, { need: null, x: 318, y: 200 }, { need: null, x: 34, y: 200 }, { need: null, x: 470, y: 200 },
+  { need: null, x: 250, y: 124 }, { need: null, x: 120, y: 120 }, { need: null, x: 330, y: 140 },
+];
+
 /* ───────── where cats sit ───────── */
 const SPOTS = [
   { need: 'tower', x: 445, y: 38 }, { need: 'tower', x: 445, y: 86 }, { need: 'cushion', x: 250, y: 168, sleep: true },
@@ -80,17 +129,17 @@ const SPOTS = [
   { need: null, x: 66, y: 160 }, { need: null, x: 128, y: 200 }, { need: null, x: 232, y: 200 }, { need: null, x: 352, y: 146 },
   { need: null, x: 154, y: 148 }, { need: null, x: 476, y: 178 }, { need: null, x: 34, y: 196 }, { need: null, x: 280, y: 148 },
 ];
-function layout(cats, furn) {
-  const open = SPOTS.filter(s => !s.need || furn[s.need]);
+function layout(cats, furn, which) {
+  const open = (which === 'out' ? SPOTS_OUT : SPOTS).filter(s => !s.need || furn[s.need]);
   return cats.map((cat, i) => ({ cat, spot: open[i % open.length], face: (cat.uid * 7) % 3 ? 1 : -1 }));
 }
 const pops = [];
 function pop(uid) { pops.push({ uid, t: 0 }); }
 
-function draw(c, cats, furn, t, sel, dt) {
-  shell(c, t);
-  for (const id of BACK_TO_FRONT) if (furn[id]) FURN_DRAW[id](c, t);
-  const L = layout(cats, furn).sort((a, b) => a.spot.y - b.spot.y);
+function draw(c, cats, furn, t, sel, dt, which = 'in') {
+  if (which === 'out') { yardShell(c, t); for (const id of YARD_ORDER) if (furn[id]) YARD_DRAW[id](c, t); }
+  else { shell(c, t); for (const id of BACK_TO_FRONT) if (furn[id]) FURN_DRAW[id](c, t); }
+  const L = layout(cats, furn, which).sort((a, b) => a.spot.y - b.spot.y);
   for (const { cat, spot, face } of L) {
     const seed = (cat.uid * 0.37) % 1, s = 0.95;
     c.save(); c.fillStyle = 'rgba(60,40,30,.16)'; c.beginPath(); c.ellipse(spot.x, spot.y + 11, 12, 3.6, 0, 0, TAU); c.fill(); c.restore();
@@ -108,9 +157,9 @@ function draw(c, cats, furn, t, sel, dt) {
   for (let i = pops.length - 1; i >= 0; i--) if (pops[i].t > 1.1) pops.splice(i, 1);
 }
 function heart(c, x, y, r) { c.beginPath(); c.moveTo(x, y + r); c.bezierCurveTo(x - r * 1.8, y - r * 0.2, x - r * 0.8, y - r * 1.6, x, y - r * 0.5); c.bezierCurveTo(x + r * 0.8, y - r * 1.6, x + r * 1.8, y - r * 0.2, x, y + r); fillInk(c, '#ff6b81', 1.1); }
-function hit(cats, furn, x, y) {
+function hit(cats, furn, x, y, which = 'in') {
   let best = null, bd = 26 * 26;
-  for (const { cat, spot } of layout(cats, furn)) { const d = (spot.x + 4 - x) ** 2 + (spot.y - 4 - y) ** 2; if (d < bd) { bd = d; best = cat.uid; } }
+  for (const { cat, spot } of layout(cats, furn, which)) { const d = (spot.x + 4 - x) ** 2 + (spot.y - 4 - y) ** 2; if (d < bd) { bd = d; best = cat.uid; } }
   return best;
 }
 

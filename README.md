@@ -10,7 +10,9 @@
 | `index.html` | 화면 구조와 스타일 |
 | `js/data.js` | 고양이·무기·적·스테이지·업적 표 |
 | `js/art.js`, `js/art2.js` | 캐릭터·적·아이콘·바닥 그림 |
-| `js/room.js` | 아지트 방 그림 |
+| `js/room.js` | 아지트 거실과 마당 그림 |
+| `js/content2.js` | 두 번째 콘텐츠 묶음: 고양이·무기·장신구·적·스테이지·단련·기술·가구·업적 |
+| `js/content2-art.js` | 두 번째 콘텐츠 묶음의 그림, 아이콘, 바닥 |
 | `js/game.js` | 게임 로직 전체 |
 | `_headers` | Cloudflare Pages 캐시 설정 |
 
