@@ -162,6 +162,7 @@ function computeW(w) {
   let cdm = 1;
   for (let i = 0; i < w.lv - 1; i++) { const u = D.ups[i]; for (const k in u) { if (k === 'cd') cdm += u[k]; else s[k] = (s[k] || 0) + u[k]; } }
   s.cd *= cdm; if (w.evo) Object.assign(s, D.evo.set);
+  s.dmg *= (w.evo ? GN.BALE : GN.BAL)[w.id] || 1;
   s.area *= p.area; s.speed *= p.pspeed; s.dur *= p.dur; s.cd *= p.cdMul; if (!D.noAmount) s.amount += p.amount;
   w.S = s;
 }
@@ -328,11 +329,11 @@ function hurtPlayer(d) {
 const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 /* ───────── weapons ───────── */
-function slash(ang, range, dmg, full) {
+function slash(ang, range, dmg, full, src = 'claw') {
   const p = G.p;
   forNear(p.x, p.y, range, e => {
     const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (d < range + e.r && (full || d < 26 || angDiff(Math.atan2(dy, dx), ang) < 1.15)) hurt(e, dmg, 'claw', dx / d * 130, dy / d * 130);
+    if (d < range + e.r && (full || d < 26 || angDiff(Math.atan2(dy, dx), ang) < 1.15)) hurt(e, dmg, src, dx / d * 130, dy / d * 130);
   });
   G.fx.push({ type: 'slash', x: p.x, y: p.y, ang, r: range, full, t: 0, life: 0.2 });
 }
@@ -345,56 +346,67 @@ function strike(x, y, S, chain, from) {
   const r = 34 * S.area;
   G.fx.push({ type: 'bolt', x1: from ? from.x : x + rand(-30, 30), y1: from ? from.y : y - 320, x2: x, y2: y, seed: rand(100), t: 0, life: 0.16 });
   let first = null;
-  forNear(x, y, r, e => { if (Math.hypot(e.x - x, e.y - y) < r + e.r) { if (!first) first = e; hurt(e, from ? S.dmg * 0.6 : S.dmg, 'static'); } });
+  forNear(x, y, r, e => { if (Math.hypot(e.x - x, e.y - y) < r + e.r) { if (!first) first = e; hurt(e, from ? S.dmg * 0.6 : S.dmg, 'static'); if (S.blind && !e.T.boss) e.stun = Math.max(e.stun, S.blind); } });
   sfx('zap'); glow(x, y, 30, '#fff6a8', 0.18, 0.9); sparks(x, y, 4, COL.butter, -Math.PI / 2, 1.4, 300);
   if (chain > 0) { const nx = nearest(x, y, 150, first); if (nx) strike(nx.x, nx.y, S, chain - 1, { x, y }); }
 }
 const FIRE = {
   claw(w, S) {
-    const p = G.p, face = Math.atan2(p.fy, p.fx), range = 80 * S.area;
-    if (S.full) { slash(face, range, S.dmg, true); return; }
-    const n = Math.max(1, S.amount); if (n >= 5) slash(face, range, S.dmg, true); else for (let i = 0; i < n; i++) slash(face + i * TAU / n, range, S.dmg, false);
+    const p = G.p, range = 80 * S.area, tg = S.aim ? nearest(p.x, p.y, range + 120) : null, face = tg ? Math.atan2(tg.y - p.y, tg.x - p.x) : Math.atan2(p.fy, p.fx);
+    const n = Math.max(1, S.amount), full = S.full || n >= 5;
+    if (full) slash(face, range, S.dmg, true); else for (let i = 0; i < n; i++) slash(face + i * TAU / n, range, S.dmg, false);
+    if (S.echo) G.fx.push({ type: 'echo', t: 0, life: S.echo, ang: face + 0.4, range, dmg: S.dmg * 0.6, full, n, src: w.id });
   },
   hairball(w, S) {
     if (S.rapid) { for (let i = 0; i < S.amount; i++) fireHair(w, S, (i - (S.amount - 1) / 2) * 0.22); }
+    else if (S.fan) { for (let i = 0; i < S.amount; i++) fireHair(w, S, (i - (S.amount - 1) / 2) * S.fan); }
     else { fireHair(w, S, 0); w.burst = S.amount - 1; w.bt = 0.09; }
   },
   fishbone(w, S) {
     const p = G.p, tg = nearest(p.x, p.y, 420), base = tg ? Math.atan2(tg.y - p.y, tg.x - p.x) : Math.atan2(p.fy, p.fx);
-    for (let i = 0; i < S.amount; i++) G.shots.push({ kind: 'bone', x: p.x, y: p.y, ang: base + (i - (S.amount - 1) / 2) * 0.5, sp: 470 * S.speed, back: false, r: 13 * S.area, dmg: S.dmg, rot: 0, life: 5, dead: false });
+    for (let i = 0; i < S.amount; i++) G.shots.push({ kind: 'bone', x: p.x, y: p.y, ang: base + (i - (S.amount - 1) / 2) * 0.5, sp: 470 * S.speed, back: false, r: 13 * S.area, dmg: S.dmg, rot: 0, life: 5, dead: false, smack: S.smack });
   },
   meow(w, S) {
     const p = G.p, R = 115 * S.area;
-    forNear(p.x, p.y, R, e => { const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1; if (d < R + e.r) { hurt(e, S.dmg, 'meow', dx / d * 280, dy / d * 280); if (S.stun && !e.T.boss) e.stun = S.stun; } });
+    forNear(p.x, p.y, R, e => { const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1; if (d < R + e.r) { const k = S.pull ? -Math.min(220, d * 2.2) : 280; hurt(e, S.dmg, 'meow', dx / d * k, dy / d * k); if (S.stun && !e.T.boss) e.stun = S.stun; } });
     G.fx.push({ type: 'ring', x: p.x, y: p.y, r: R, t: 0, life: 0.35, col: COL.butter }); sfx('meow');
   },
   tuna(w, S) {
     const p = G.p, vr = viewR() * 0.8;
-    for (let i = 0; i < S.amount; i++) { const tg = randTarget(vr); G.fx.push({ type: 'can', x: tg ? tg.x : p.x + rand(-160, 160), y: tg ? tg.y : p.y + rand(-160, 160), t: -i * 0.1, life: 0.5, r: 55 * S.area, dmg: S.dmg, coin: S.coin }); }
+    for (let i = 0; i < S.amount; i++) { const tg = randTarget(vr); G.fx.push({ type: 'can', x: tg ? tg.x : p.x + rand(-160, 160), y: tg ? tg.y : p.y + rand(-160, 160), t: -i * 0.1, life: 0.5, r: 55 * S.area, dmg: S.dmg, coin: S.coin, patch: S.patch }); }
   },
   purr(w, S) {
-    const p = G.p, R = 62 * S.area; let any = false;
+    const p = G.p, R = auraR(S); let any = false;
     forNear(p.x, p.y, R, e => { const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1; if (d < R + e.r) { any = true; hurt(e, S.dmg, 'purr', dx / d * 30, dy / d * 30); } });
     if (any && S.heal) p.hp = Math.min(p.maxHp, p.hp + S.heal);
   },
   spill(w, S) {
     const p = G.p;
-    for (let i = 0; i < S.amount; i++) { const tg = randTarget(280); G.zones.push({ kind: 'puddle', x: tg ? tg.x : p.x + rand(-150, 150), y: tg ? tg.y : p.y + rand(-150, 150), r: 46 * S.area, life: 3 * S.dur, max: 3 * S.dur, tick: 0.15, dmg: S.dmg, slow: S.slow, dead: false }); }
+    for (let i = 0; i < S.amount; i++) { const tg = randTarget(280); G.zones.push({ kind: 'puddle', x: tg ? tg.x : p.x + rand(-150, 150), y: tg ? tg.y : p.y + rand(-150, 150), r: 46 * S.area, life: 3 * S.dur, max: 3 * S.dur, tick: 0.15, dmg: S.dmg, slow: S.slow, confuse: S.confuse, dead: false }); }
   },
   bowl(w, S) {
     const p = G.p, n = S.amount;
-    for (let i = 0; i < n; i++) G.shots.push({ kind: 'lob', x: p.x, y: p.y - 6, vx: (i - (n - 1) / 2) * 75 + p.face * 70 + rand(-20, 20), vy: -440 * Math.sqrt(S.speed), r: 12 * S.area, dmg: S.dmg, pierce: S.pierce, hit: [], rot: 0, life: 3, dead: false });
+    for (let i = 0; i < n; i++) G.shots.push({ kind: 'lob', x: p.x, y: p.y - 6, vx: (i - (n - 1) / 2) * 75 + p.face * 70 + rand(-20, 20), vy: -440 * Math.sqrt(S.speed), r: 12 * S.area, dmg: S.dmg, pierce: S.pierce, hit: [], rot: 0, life: 3, dead: false, bounce: S.bounce });
   },
   static(w, S) {
-    const vr = viewR() * 0.8;
+    const vr = viewR() * 0.8, p = G.p;
+    if (S.blind) { const near = G.enemies.filter(e => !e.dead && !e.T.prop && Math.hypot(e.x - p.x, e.y - p.y) < 320).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)); for (let i = 0; i < S.amount && i < near.length; i++) strike(near[i].x, near[i].y, S, S.chain || 0, null); return; }
     for (let i = 0; i < S.amount; i++) { const tg = randTarget(vr); if (tg) strike(tg.x, tg.y, S, S.chain || 0, null); }
   },
   ball(w, S) {
     const p = G.p;
-    for (let i = 0; i < S.amount; i++) { const a = rand(TAU), sp = 330 * S.speed; G.shots.push({ kind: 'ball', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 10 * S.area, dmg: S.dmg, life: 4 * S.dur, rot: 0, dead: false }); }
+    for (let i = 0; i < S.amount; i++) { const a = rand(TAU), sp = 330 * S.speed; G.shots.push({ kind: 'ball', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 10 * S.area, dmg: S.dmg, life: 4 * S.dur, rot: 0, dead: false, rico: S.rico }); }
   },
   tailwhip(w, S) {
     const p = G.p, wd = 130 * S.area, hh = 24 * S.area;
+    if (S.vertical) {
+      for (let i = 0; i < S.amount; i++) {
+        const dir = i % 2 === 0 ? -1 : 1, cx = p.x + (Math.floor(i / 2) * 36 * S.area) * p.face, cy = p.y - 4 + dir * wd / 2;
+        forNear(cx, cy, wd / 2, e => { if (Math.abs(e.x - cx) < hh + e.r && Math.abs(e.y - cy) < wd / 2 + e.r) hurt(e, S.dmg, 'tailwhip', 0, dir * 170, !!S.crit && Math.random() < S.crit); });
+        G.fx.push({ type: 'whip', x: cx, y: p.y - 4, dir, w: wd, h: hh, t: -i * 0.05, life: 0.22, vert: true });
+      }
+      return;
+    }
     for (let i = 0; i < S.amount; i++) {
       const dir = (i % 2 === 0 ? p.face : -p.face), cy = p.y - 4 - Math.floor(i / 2) * 36 * S.area, cx = p.x + dir * wd / 2;
       forNear(cx, cy, wd / 2, e => { if (Math.abs(e.x - cx) < wd / 2 + e.r && Math.abs(e.y - cy) < hh + e.r) hurt(e, S.dmg, 'tailwhip', dir * 170, 0, !!S.crit && Math.random() < S.crit); });
@@ -403,30 +415,35 @@ const FIRE = {
   },
   sardine(w, S) {
     const p = G.p, vr = viewR() * 0.8;
-    for (let i = 0; i < S.amount; i++) { const a = -Math.PI / 2 + rand(-1.2, 1.2); G.shots.push({ kind: 'homing', x: p.x, y: p.y, vx: Math.cos(a) * 200, vy: Math.sin(a) * 200, sp: 310 * S.speed, tg: randTarget(vr), r: 8, boom: 40 * S.area, dmg: S.dmg, life: 4, dead: false }); }
+    for (let i = 0; i < S.amount; i++) { const a = -Math.PI / 2 + rand(-1.2, 1.2); G.shots.push({ kind: 'homing', x: p.x, y: p.y, vx: Math.cos(a) * 200, vy: Math.sin(a) * 200, sp: 310 * S.speed, tg: randTarget(vr), r: 8, boom: 40 * S.area, dmg: S.dmg, life: 4, dead: false, trap: S.trap }); }
   },
   boxtrap(w, S) {
     const p = G.p; let mines = G.zones.filter(z => z.kind === 'mine' && !z.dead);
     for (let i = 0; i < S.amount; i++) {
       if (mines.length >= 14) { mines[0].dead = true; mines.shift(); }
-      const a = rand(TAU), d = rand(50, 120), z = { kind: 'mine', x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d, r: 14, boom: 62 * S.area, life: 10 * S.dur, max: 10 * S.dur, arm: 0.35, dmg: S.dmg, stun: S.stun, dead: false };
+      const a = S.ring ? (G.t * 0.7 + i / S.amount * TAU) : rand(TAU), d = S.ring ? 85 : rand(50, 120), z = { kind: 'mine', chain: S.ring, x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d, r: 14, boom: 62 * S.area, life: 10 * S.dur, max: 10 * S.dur, arm: 0.35, dmg: S.dmg, stun: S.stun, dead: false };
       G.zones.push(z); mines.push(z);
     }
   },
 };
+const beamL = S => 170 * S.area * (S.aim ? 1.5 : 1);
+const beamA = (w, S, i) => S.aim ? w.ang + (i - (S.amount - 1) / 2) * 0.32 : w.ang + i / S.amount * TAU;
+const orbitR = S => 74 * S.area * (S.pulse ? 0.55 + 0.6 * Math.abs(Math.sin(G.t * 2.2)) : 1);
+const auraR = S => 62 * S.area * (S.still && !G.p.moving ? S.still : 1);
 const TICK = {
   yarn(w, S, dt) {
-    const p = G.p, R = 74 * S.area, br = 10 * Math.sqrt(S.area); w.ang += 3 * S.speed * dt;
+    const p = G.p, R = orbitR(S), br = 10 * Math.sqrt(S.area); w.ang += 3 * S.speed * dt;
     for (let i = 0; i < S.amount; i++) {
       const a = w.ang + i / S.amount * TAU, bx = p.x + Math.cos(a) * R, by = p.y + Math.sin(a) * R;
       forNear(bx, by, br, e => { if (e.yarnT > G.t) return; const dx = e.x - bx, dy = e.y - by; if (dx * dx + dy * dy < (br + e.r) ** 2) { e.yarnT = G.t + 0.45; const ex = e.x - p.x, ey = e.y - p.y, d = Math.hypot(ex, ey) || 1; hurt(e, S.dmg, 'yarn', ex / d * 110, ey / d * 110); } });
     }
   },
   laser(w, S, dt) {
-    const p = G.p, L = 170 * S.area; w.ang += 2.2 * S.speed * dt; w.tt -= dt; if (w.tt > 0) return; w.tt = Math.max(0.08, S.cd);
+    const p = G.p, L = beamL(S);
+    if (S.aim) { const tg = nearest(p.x, p.y, beamL(S) + 40), ta = tg ? Math.atan2(tg.y - p.y, tg.x - p.x) : Math.atan2(p.fy, p.fx); w.ang += Math.atan2(Math.sin(ta - w.ang), Math.cos(ta - w.ang)) * Math.min(1, 10 * dt); } else w.ang += 2.2 * S.speed * dt; w.tt -= dt; if (w.tt > 0) return; w.tt = Math.max(0.08, S.cd);
     for (let i = 0; i < S.amount; i++) {
-      const a = w.ang + i / S.amount * TAU, ux = Math.cos(a), uy = Math.sin(a);
-      forNear(p.x + ux * L / 2, p.y + uy * L / 2, L / 2, e => { const dx = e.x - p.x, dy = e.y - p.y, al = dx * ux + dy * uy; if (al < -e.r || al > L + e.r) return; if (Math.abs(dx * uy - dy * ux) < 9 + e.r) hurt(e, S.dmg, 'laser'); });
+      const a = beamA(w, S, i), ux = Math.cos(a), uy = Math.sin(a);
+      forNear(p.x + ux * L / 2, p.y + uy * L / 2, L / 2, e => { const dx = e.x - p.x, dy = e.y - p.y, al = dx * ux + dy * uy; if (al < -e.r || al > L + e.r) return; if (Math.abs(dx * uy - dy * ux) < (S.aim ? 16 : 9) + e.r) hurt(e, S.dmg, 'laser'); });
     }
   },
   kitten(w, S, dt) {
@@ -438,7 +455,11 @@ const TICK = {
       let tx, ty; if (k.tg) { tx = k.tg.x; ty = k.tg.y; } else { const a = G.t * 1.5 + i / n * TAU; tx = p.x + Math.cos(a) * 40; ty = p.y + Math.sin(a) * 40; }
       const dx = tx - k.x, dy = ty - k.y, d = Math.hypot(dx, dy) || 1, step = Math.min(d, sp * dt);
       k.x += dx / d * step; k.y += dy / d * step; if (Math.abs(dx) > 2) k.face = dx > 0 ? 1 : -1;
-      if (k.tg && d < reach + k.tg.r && k.tg.petT <= G.t) { k.tg.petT = G.t + 0.5; hurt(k.tg, S.dmg, 'kitten', dx / d * 90, dy / d * 90); }
+      if (k.tg && d < reach + k.tg.r && k.tg.petT <= G.t) {
+        k.tg.petT = G.t + 0.5;
+        if (S.pop) { boom(k.tg.x, k.tg.y, 30 * S.area, S.dmg, w.id, { col: '#ffd84d' }); k.x = p.x + rand(-14, 14); k.y = p.y + rand(-14, 14); k.st = 0.7; k.tg = null; }
+        else hurt(k.tg, S.dmg, 'kitten', dx / d * 90, dy / d * 90);
+      }
     });
   },
 };
@@ -464,7 +485,7 @@ function weaponsUpdate(dt) {
 function shotsUpdate(dt) {
   const p = G.p, hw = W / 2 / ZOOM, hh = H / 2 / ZOOM;
   for (const s of G.shots) {
-    s.life -= dt; if (s.life <= 0) { if (s.kind === 'homing') boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col }); s.dead = true; continue; }
+    s.life -= dt; if (s.life <= 0) { if (s.kind === 'homing') boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col, stun: s.trap }); s.dead = true; continue; }
     if (s.kind === 'hair') {
       s.x += s.vx * dt; s.y += s.vy * dt;
       forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, s.src || 'hairball', s.vx * 0.3, s.vy * 0.3); if (--s.pierce <= 0) s.dead = true; } });
@@ -473,21 +494,21 @@ function shotsUpdate(dt) {
       if (!s.back) { dx = Math.cos(s.ang); dy = Math.sin(s.ang); s.sp -= 560 * dt; if (s.sp <= 0) { s.back = true; s.sp = 0; } }
       else { const ex = p.x - s.x, ey = p.y - s.y, d = Math.hypot(ex, ey) || 1; dx = ex / d; dy = ey / d; s.sp = Math.min(600, s.sp + 760 * dt); if (d < 20) { s.dead = true; continue; } }
       s.x += dx * s.sp * dt; s.y += dy * s.sp * dt;
-      forNear(s.x, s.y, s.r, e => { if (e.boneT > G.t) return; const ex = e.x - s.x, ey = e.y - s.y; if (ex * ex + ey * ey < (s.r + e.r) ** 2) { e.boneT = G.t + 0.35; hurt(e, s.dmg, s.src || 'fishbone', dx * 70, dy * 70); } });
+      forNear(s.x, s.y, s.r, e => { if (e.boneT > G.t) return; const ex = e.x - s.x, ey = e.y - s.y; if (ex * ex + ey * ey < (s.r + e.r) ** 2) { e.boneT = G.t + 0.35; hurt(e, s.dmg, s.src || 'fishbone', dx * (s.smack ? 260 : 70), dy * (s.smack ? 260 : 70)); if (s.smack && !e.T.boss) e.stun = Math.max(e.stun, 0.35); } });
     } else if (s.kind === 'lob') {
       s.vy += 780 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 9;
-      forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, s.src || 'bowl', s.vx * 0.3, 60); if (--s.pierce <= 0) s.dead = true; } });
+      forNear(s.x, s.y, s.r, e => { if (s.dead || s.hit.includes(e)) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { s.hit.push(e); hurt(e, s.dmg, s.src || 'bowl', s.vx * 0.3, 60); if (s.bounce) { s.vx = -s.vx * 0.8 + rand(-60, 60); s.vy = -Math.abs(s.vy) * 0.7 - 120; } if (--s.pierce <= 0) s.dead = true; } });
     } else if (s.kind === 'ball') {
       s.x += s.vx * dt; s.y += s.vy * dt; s.rot += dt * 8;
       if (s.x < p.x - hw && s.vx < 0 || s.x > p.x + hw && s.vx > 0) s.vx = -s.vx;
       if (s.y < p.y - hh && s.vy < 0 || s.y > p.y + hh && s.vy > 0) s.vy = -s.vy;
-      forNear(s.x, s.y, s.r, e => { if (e.ballT > G.t) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { e.ballT = G.t + 0.4; hurt(e, s.dmg, s.src || 'ball', s.vx * 0.25, s.vy * 0.25); } });
+      forNear(s.x, s.y, s.r, e => { if (e.ballT > G.t) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) { e.ballT = G.t + 0.4; hurt(e, s.dmg, s.src || 'ball', s.vx * 0.25, s.vy * 0.25); if (s.rico) { const nx = nearest(s.x, s.y, 260, e); if (nx) { const sp = Math.hypot(s.vx, s.vy), a = Math.atan2(nx.y - s.y, nx.x - s.x); s.vx = Math.cos(a) * sp; s.vy = Math.sin(a) * sp; } } } });
     } else if (s.kind === 'homing') {
       if (!s.tg || s.tg.dead) s.tg = nearest(s.x, s.y, 500);
       if (s.tg) { const dx = s.tg.x - s.x, dy = s.tg.y - s.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 7 * dt); s.vx += (dx / d * s.sp - s.vx) * k; s.vy += (dy / d * s.sp - s.vy) * k; }
       s.x += s.vx * dt; s.y += s.vy * dt; let hit = false;
       forNear(s.x, s.y, s.r, e => { if (hit) return; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < (s.r + e.r) ** 2) hit = true; });
-      if (hit) { boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col }); s.dead = true; }
+      if (hit) { boom(s.x, s.y, s.boom, s.dmg, s.src || 'sardine', { col: s.col, stun: s.trap }); s.dead = true; }
     }
   }
 }
@@ -496,11 +517,12 @@ function zonesUpdate(dt) {
     if (z.dead) continue; z.life -= dt; if (z.life <= 0) { z.dead = true; continue; }
     if (z.kind === 'puddle') {
       z.tick -= dt; if (z.tick > 0) continue; z.tick = 0.4;
-      forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, z.src || 'spill'); if (z.slow) e.slow = 0.8; } });
+      forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, z.src || 'spill'); if (z.slow) e.slow = 0.8; if (z.confuse && !e.T.boss) e.confuse = 0.9; } });
     } else {
       z.arm -= dt; if (z.arm > 0) continue; let hit = false;
       forNear(z.x, z.y, z.r, e => { if (!hit && !e.T.prop && Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) hit = true; });
-      if (hit) { z.dead = true; boom(z.x, z.y, z.boom, z.dmg, z.src || 'boxtrap', { stun: z.stun, col: z.bcol || '#d9a66b' }); }
+      if (z.go) hit = true;
+      if (hit) { z.dead = true; boom(z.x, z.y, z.boom, z.dmg, z.src || 'boxtrap', { stun: z.stun, col: z.bcol || '#d9a66b' }); if (z.chain) for (const o of G.zones) if (o.kind === 'mine' && !o.dead && o !== z && Math.hypot(o.x - z.x, o.y - z.y) < 95) { o.go = true; o.arm = Math.min(o.arm, 0.08); } }
     }
   }
 }
@@ -687,9 +709,10 @@ function enemiesUpdate(dt) {
   const p = G.p, vr = viewR(), kdecay = Math.exp(-9 * dt), frozen = G.freeze > 0;
   for (const e of G.enemies) {
     if (e.dead) continue;
-    e.flash -= dt; e.slow -= dt; e.hitT -= dt;
+    e.flash -= dt; e.slow -= dt; e.hitT -= dt; if (e.confuse > 0) e.confuse -= dt;
     let dx = p.x - e.x, dy = p.y - e.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
     const T = e.T;
+    if (e.confuse > 0) { dx = -dx; dy = -dy; }
     if (p.hide > 0 && !T.boss && !T.dash && !T.prop) { const wa = e.seed * TAU + G.t * 0.5; dx = Math.cos(wa) * 0.6 - dx * 0.4; dy = Math.sin(wa) * 0.6 - dy * 0.4; }
     if (T.prop) { if (d > vr * 2.4) e.dead = true; continue; }
     if (frozen) continue;
@@ -721,7 +744,7 @@ function enemiesUpdate(dt) {
 }
 
 /* ───────── pickups & fx ───────── */
-function gainCoins(n) { const v = n * G.p.greed; G.coins += v; G.earned += v; }
+function gainCoins(n) { const v = n * G.p.greed * GN.COIN_MUL; G.coins += v; G.earned += v; }
 function collect(k) {
   const p = G.p;
   switch (k.type) {
@@ -753,7 +776,8 @@ function fxUpdate(dt) {
     if (f.t >= f.life) {
       f.dead = true;
       if (f.type === 'num') G.nums--;
-      else if (f.type === 'can') boom(f.x, f.y, f.r, f.dmg, f.src || 'tuna', { coin: f.coin, col: f.col || '#4fb7c9' });
+      else if (f.type === 'echo') { if (f.full) slash(f.ang, f.range, f.dmg, true, f.src); else for (let i = 0; i < f.n; i++) slash(f.ang + i * TAU / f.n, f.range, f.dmg, false, f.src); }
+      else if (f.type === 'can') { boom(f.x, f.y, f.r, f.dmg, f.src || 'tuna', { coin: f.coin, col: f.col || '#4fb7c9' }); if (f.patch) G.zones.push({ kind: 'puddle', x: f.x, y: f.y, r: f.r * 0.6, life: 2.5, max: 2.5, tick: 0.2, dmg: f.dmg * 0.08, slow: 1, col: '#c9a77a', src: f.src, dead: false }); }
       else if (f.type === 'warn') { const T = ENEMIES[G.stage.dasher], e = spawn(G.stage.dasher, { x: f.x, y: f.y }); e.vx = Math.cos(f.ang) * T.spd; e.vy = Math.sin(f.ang) * T.spd; e.life = f.len / T.spd + 0.3; }
     }
   }
@@ -927,8 +951,8 @@ function render(now) {
   for (const w of p.weapons) {
     const S = w.S;
     const K = WEAPONS[w.id].kind || w.id, AC = WEAPONS[w.id].aura || COL.mint;
-    if (K === 'purr') { const R = 62 * S.area; c.globalAlpha = 0.16 + 0.05 * Math.sin(gt * 6); dot(c, p.x, p.y, R, AC); c.globalAlpha = 0.6; c.strokeStyle = AC; c.lineWidth = 2.5; c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.stroke(); c.globalAlpha = 1; }
-    else if (K === 'laser') { const L = 170 * S.area; c.lineCap = 'round'; for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU, x2 = p.x + Math.cos(a) * L, y2 = p.y + Math.sin(a) * L, col = S.rainbow ? RAINBOW[i % 5] : (WEAPONS[w.id].beamCol || '#ff6b6b'); c.globalAlpha = 0.55; c.strokeStyle = col; c.lineWidth = 9; line(c, p.x, p.y, x2, y2); c.globalAlpha = 1; c.strokeStyle = '#fff'; c.lineWidth = 2.5; line(c, p.x, p.y, x2, y2); dot(c, x2, y2, 6, col); } }
+    if (K === 'purr') { const R = auraR(S); c.globalAlpha = 0.16 + 0.05 * Math.sin(gt * 6); dot(c, p.x, p.y, R, AC); c.globalAlpha = 0.6; c.strokeStyle = AC; c.lineWidth = 2.5; c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.stroke(); c.globalAlpha = 1; }
+    else if (K === 'laser') { const L = beamL(S); c.lineCap = 'round'; for (let i = 0; i < S.amount; i++) { const a = beamA(w, S, i), x2 = p.x + Math.cos(a) * L, y2 = p.y + Math.sin(a) * L, col = S.rainbow ? RAINBOW[i % 5] : (WEAPONS[w.id].beamCol || '#ff6b6b'); c.globalAlpha = 0.55; c.strokeStyle = col; c.lineWidth = 9; line(c, p.x, p.y, x2, y2); c.globalAlpha = 1; c.strokeStyle = '#fff'; c.lineWidth = 2.5; line(c, p.x, p.y, x2, y2); dot(c, x2, y2, 6, col); } }
   }
 
   const list = G.enemies; list.sort((a, b) => a.y - b.y);
@@ -964,7 +988,7 @@ function render(now) {
   for (const w of p.weapons) {
     const S = w.S;
     const K = WEAPONS[w.id].kind || w.id;
-    if (K === 'yarn') { const R = 74 * S.area, sz = 36 * Math.sqrt(S.area); for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU; drawIco(c, w.id, p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, sz, a * 2); } }
+    if (K === 'yarn') { const R = orbitR(S), sz = 36 * Math.sqrt(S.area); for (let i = 0; i < S.amount; i++) { const a = w.ang + i / S.amount * TAU; drawIco(c, w.id, p.x + Math.cos(a) * R, p.y + Math.sin(a) * R, sz, a * 2); } }
     else if (K === 'kitten') for (const k of w.pets) { c.save(); c.translate(k.x, k.y); c.scale(k.face, 1); c.drawImage(icoSprite(w.id), -13, -13, 26, 26); c.restore(); }
   }
   drawParts(c, inView);
@@ -988,7 +1012,7 @@ function render(now) {
       c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1 - q * q; c.fillStyle = gr; crescent(c, rr, a0, a1, w, f.full); c.fill();
       c.restore(); c.globalAlpha = 1;
     } else if (f.type === 'whip') {
-      c.save(); c.translate(f.x, f.y); c.scale(f.dir, 1); const path = k => { c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(f.w * 0.5, -f.h * 1.5 * k, f.w, 0); c.quadraticCurveTo(f.w * 0.5, -f.h * 0.2 * k, 0, 0); };
+      c.save(); c.translate(f.x, f.y); if (f.vert) c.rotate(Math.PI / 2); c.scale(f.dir, 1); const path = k => { c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(f.w * 0.5, -f.h * 1.5 * k, f.w, 0); c.quadraticCurveTo(f.w * 0.5, -f.h * 0.2 * k, 0, 0); };
       c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.5 * (1 - q); c.fillStyle = '#ffb36b'; path(1.25); c.fill();
       const gw = c.createLinearGradient(0, -f.h * 1.2, 0, 0); gw.addColorStop(0, '#ffffff'); gw.addColorStop(1, 'rgba(255,150,80,.95)');
       c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1 - q * q; c.fillStyle = gw; path(1); c.fill(); c.restore(); c.globalAlpha = 1;
@@ -1081,7 +1105,7 @@ function settleHome() {
   for (const r of G.rescued) {
     if (r.member && !G.squad.includes(r.member)) { r.status = 'lost'; out.lost++; }
     else if (H.cats.length < homeCap()) { H.cats.push({ uid: ++H.uid, breed: r.breed, name: r.name, bond: 0, fed: -1 }); r.status = 'home'; out.home++; }
-    else { r.status = 'mom'; out.mom++; save.coins += 20; }
+    else { r.status = 'mom'; out.mom++; save.coins += GN.MOM_COIN; }
   }
   return out;
 }
@@ -1090,7 +1114,7 @@ function homeNote(o) {
   if (o.home) parts.push(`${o.home}마리가 아지트에 새로 들어왔어요.`);
   if (o.bumped) parts.push(`아지트 고양이 ${o.bumped}마리와 더 친해졌어요.`);
   if (o.ready.length) parts.push(`${o.ready.join(', ')} 입양 준비를 마쳤어요!`);
-  if (o.mom) parts.push(`아지트가 가득 차서 ${o.mom}마리는 동네 캣맘에게 맡겼어요 (동전 +${o.mom * 20}).`);
+  if (o.mom) parts.push(`아지트가 가득 차서 ${o.mom}마리는 동네 캣맘에게 맡겼어요 (동전 +${o.mom * GN.MOM_COIN}).`);
   if (o.lost) parts.push(`${o.lost}마리는 놀라서 숨은 채 길을 잃었어요.`);
   return parts.join(' ');
 }
@@ -1267,7 +1291,7 @@ function choiceInfo(ch) {
   if (ch.kind === 'p') { const s = p.passives.find(x => x.id === ch.id), P = PASSIVES[ch.id], use = Object.keys(WEAPONS).find(k => WEAPONS[k].evo.needs === ch.id);
     return { icon: ch.id, name: P.name, role: P.role, tag: s ? `Lv ${s.lv} → ${s.lv + 1}` : '새 장신구', isNew: !s, desc: P.desc, ev: use ? `${WEAPONS[use].name} 진화에 필요` : '' }; }
   if (ch.kind === 'heal') return { icon: 'churu', name: '츄르 한 봉', tag: '간식', desc: '체력 40 회복', ev: '' };
-  return { icon: 'coin', name: '동전 주머니', tag: '용돈', desc: '동전 +25', ev: '' };
+  return { icon: 'coin', name: '동전 주머니', tag: '용돈', desc: `동전 +${Math.round(25 * G.p.greed * GN.COIN_MUL)}`, ev: '' };
 }
 function openLevelUp(keep) {
   state = 'levelup'; if (!keep) { curChoices = rollChoices(); banMode = false; sfx('lvl'); }
@@ -1312,7 +1336,7 @@ function openBox() {
   $('#boxTitle').textContent = items.some(x => x.evo) ? '무기 진화!' : n >= 5 ? '대박 상자!' : n >= 3 ? '묵직한 택배 상자!' : '택배 상자 발견!';
   const box = $('#boxItems'); box.textContent = '';
   for (const it of items) { const rw = el('div', 'item' + (it.evo ? ' evorow' : '')); rw.appendChild(mkIcon(it.icon, 40)); const m = el('div'); m.appendChild(el('div', 'nm', it.name)); m.appendChild(el('div', 'ds', it.desc)); rw.appendChild(m); box.appendChild(rw); }
-  $('#boxText').textContent = `동전 +${num(bonus * p.greed)}`;
+  $('#boxText').textContent = `동전 +${num(bonus * p.greed * GN.COIN_MUL)}`;
   show('#ovBox');
 }
 

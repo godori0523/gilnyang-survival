@@ -55,55 +55,62 @@ Object.assign(GN.ALLY, {
 /* ───────── 16 more weapons (each borrows the behaviour named by kind) ───────── */
 const WPN = (name, kind, desc, base, ups, evo, extra) => Object.assign({ name, role: 'atk', kind, desc, base, ups, evo }, extra || {});
 Object.assign(GN.WEAPONS, {
-  fork: WPN('포크 표창', 'hairball', '빠르게 날아가 적을 뚫는 포크', { dmg: 7, cd: 0.7, amount: 1, pierce: 2 },
+  fork: WPN('포크 표창', 'hairball', '포크 여러 개를 부채꼴로 한꺼번에 던진다', { fan: 0.28, dmg: 7, cd: 0.8, amount: 2, pierce: 2 },
     [{ amount: 1 }, { dmg: 3 }, { pierce: 1 }, { cd: -0.1 }, { amount: 1 }, { dmg: 4 }, { amount: 1, pierce: 1 }],
     { name: '은빛 포크 소나기', needs: 'fang', desc: '포크를 쉬지 않고 쏟아낸다', set: { cd: 0.12, amount: 2, dmg: 18, pierce: 5, rapid: 1 } }),
-  slipper: WPN('슬리퍼 부메랑', 'fishbone', '크게 휘어 돌아오는 슬리퍼', { dmg: 18, cd: 2.8, amount: 1 },
+  slipper: WPN('슬리퍼 부메랑', 'fishbone', '맞은 적을 멀리 날려 잠깐 기절시키고 돌아온다', { smack: 1, dmg: 18, cd: 2.8, amount: 1 },
     [{ dmg: 6 }, { area: 0.2 }, { amount: 1 }, { dmg: 8 }, { speed: 0.2 }, { amount: 1 }, { dmg: 10, area: 0.2 }],
     { name: '무쇠 슬리퍼', needs: 'heavyPaw', desc: '거대한 슬리퍼 셋이 휘돈다', set: { dmg: 70, area: 2.4, cd: 1.8, amount: 3 } }),
-  marbles: WPN('회전 구슬', 'yarn', '알록달록한 구슬이 주위를 돈다', { dmg: 5, cd: 0, amount: 3 },
+  marbles: WPN('회전 구슬', 'yarn', '구슬이 멀어졌다 가까워졌다 하며 돈다', { pulse: 1, dmg: 5, cd: 0, amount: 3 },
     [{ amount: 1 }, { dmg: 3 }, { speed: 0.3 }, { amount: 1 }, { dmg: 4, area: 0.15 }, { amount: 1 }, { dmg: 5 }],
     { name: '구슬 은하', needs: 'dashShoes', desc: '구슬 열 개가 넓고 빠르게 돈다', set: { dmg: 24, amount: 10, area: 1.8, speed: 1.9 } }),
-  hotpack: WPN('핫팩 열기 오라', 'purr', '가까이 온 적을 뜨겁게 데운다', { dmg: 3, cd: 0.4 },
+  hotpack: WPN('핫팩 열기 오라', 'purr', '가까운 적을 데우고, 멈춰 있으면 열기가 크게 퍼진다', { still: 1.6, dmg: 3, cd: 0.4 },
     [{ area: 0.15 }, { dmg: 2 }, { area: 0.2 }, { dmg: 2 }, { cd: -0.1 }, { area: 0.2, dmg: 2 }, { dmg: 3 }],
     { name: '난로 오라', needs: 'warmFur', desc: '범위가 넓어지고 체력을 회복한다', set: { dmg: 12, area: 2.3, cd: 0.3, heal: 0.4 } }, { aura: '#ff9f43' }),
-  catnipcloud: WPN('캣닢 구름 장판', 'spill', '적을 어지럽히는 초록 구름을 깐다', { dmg: 5, cd: 3.0, amount: 1 },
+  catnipcloud: WPN('캣닢 구름 장판', 'spill', '구름 속 적이 어지러워 반대로 걷는다', { confuse: 1, dmg: 5, cd: 3.0, amount: 1 },
     [{ amount: 1 }, { dmg: 3, dur: 0.2 }, { area: 0.25 }, { amount: 1 }, { dmg: 4 }, { dur: 0.3 }, { amount: 1, area: 0.2 }],
     { name: '캣닢 폭풍', needs: 'nightOwl', desc: '넓은 구름이 적을 느리게 만든다', set: { dmg: 18, area: 2.1, dur: 2.2, slow: 1, amount: 4 } }, { zcol: '#bdeeb0' }),
-  flowerpot: WPN('화분 폭격', 'tuna', '창가에서 화분이 떨어진다', { dmg: 26, cd: 3.0, amount: 1 },
+  flowerpot: WPN('화분 폭격', 'tuna', '화분이 떨어진 자리에 흙이 쏟아져 적이 느려진다', { patch: 1, dmg: 26, cd: 3.0, amount: 1 },
     [{ amount: 1 }, { dmg: 10 }, { area: 0.25 }, { amount: 1 }, { cd: -0.15 }, { dmg: 12 }, { amount: 1 }],
     { name: '화분 폭격대', needs: 'coinLuck', desc: '화분 여섯 개가 터지고 동전이 나온다', set: { dmg: 75, area: 2.0, coin: 0.12, amount: 6 } }, { boomCol: '#e08a5a' }),
-  rubber: WPN('튕기는 고무줄', 'ball', '화면 끝에서 튕기는 고무줄', { dmg: 8, cd: 2.4, amount: 2 },
+  rubber: WPN('튕기는 고무줄', 'ball', '맞힌 뒤 가까운 다른 적에게 튕겨 간다', { rico: 1, dmg: 8, cd: 2.4, amount: 2 },
     [{ dmg: 3, speed: 0.2 }, { amount: 1 }, { dur: 0.3 }, { dmg: 4 }, { amount: 1 }, { dmg: 5, area: 0.2 }, { amount: 2 }],
     { name: '끝없는 고무줄', needs: 'awl', desc: '고무줄 여덟 개가 오래 튕긴다', set: { dmg: 28, area: 1.6, dur: 2.2, amount: 8 } }),
-  bubble: WPN('비눗방울 유도탄', 'sardine', '적을 따라가 터지는 비눗방울', { dmg: 12, cd: 2.0, amount: 2 },
+  bubble: WPN('비눗방울 유도탄', 'sardine', '적을 따라가 터지며 거품에 가둬 잠깐 멈춘다', { trap: 0.9, dmg: 12, cd: 2.0, amount: 2 },
     [{ dmg: 5 }, { amount: 1 }, { area: 0.25 }, { dmg: 6 }, { amount: 1 }, { cd: -0.15 }, { amount: 1, dmg: 5 }],
     { name: '거품 폭풍', needs: 'windBell', desc: '커다란 거품이 연달아 터진다', set: { dmg: 46, area: 2.0, cd: 1.2, amount: 6 } }, { boomCol: '#9fd8ff' }),
-  newspaper: WPN('신문지 휘두르기', 'tailwhip', '둘둘 만 신문지로 후려친다', { dmg: 15, cd: 1.6, amount: 1 },
+  newspaper: WPN('신문지 휘두르기', 'tailwhip', '둘둘 만 신문지로 위아래를 후려친다', { vertical: 1, dmg: 15, cd: 1.6, amount: 1 },
     [{ dmg: 6 }, { amount: 1 }, { area: 0.2 }, { dmg: 6 }, { cd: -0.15 }, { area: 0.15, dmg: 6 }, { amount: 1 }],
     { name: '신문 뭉치 대포', needs: 'bossBadge', desc: '사방을 후려치고 가끔 두 배로 아프다', set: { dmg: 50, area: 1.9, cd: 1.0, crit: 0.35, amount: 4 } }),
-  roar: WPN('으르렁 충격파', 'meow', '낮게 울려 주변 적을 밀어낸다', { dmg: 10, cd: 3.6 },
+  roar: WPN('으르렁 충격파', 'meow', '낮게 울려 주변 적을 끌어당긴다', { pull: 1, dmg: 10, cd: 3.6 },
     [{ area: 0.2 }, { dmg: 7 }, { cd: -0.15 }, { area: 0.2 }, { dmg: 9 }, { cd: -0.15 }, { dmg: 12, area: 0.2 }],
     { name: '맹수의 포효', needs: 'thornScarf', desc: '아주 넓게 울려 적을 오래 굳힌다', set: { dmg: 55, area: 2.5, cd: 2.2, stun: 1.5 } }, { ringCol: '#ff8a7a' }),
-  camera: WPN('카메라 플래시', 'static', '번쩍이는 플래시가 적을 놀래킨다', { dmg: 14, cd: 2.6, amount: 2 },
+  camera: WPN('카메라 플래시', 'static', '가까운 적부터 번쩍여 잠깐 눈을 멀게 한다', { blind: 0.6, dmg: 14, cd: 2.6, amount: 2 },
     [{ amount: 1 }, { dmg: 7 }, { area: 0.3 }, { amount: 1 }, { dmg: 9 }, { cd: -0.15 }, { amount: 2 }],
     { name: '연속 촬영', needs: 'shieldFur', desc: '플래시가 주변 적에게 번져 나간다', set: { dmg: 46, area: 1.7, chain: 4, amount: 7 } }),
-  flashlight: WPN('손전등 광선', 'laser', '빙빙 도는 손전등 빛이 적을 태운다', { dmg: 6, cd: 0.3, amount: 1 },
+  flashlight: WPN('손전등 광선', 'laser', '가장 가까운 적 쪽으로 굵은 빛을 길게 비춘다', { aim: 1, dmg: 6, cd: 0.3, amount: 1 },
     [{ dmg: 2 }, { area: 0.25 }, { dmg: 3 }, { amount: 1 }, { speed: 0.3 }, { area: 0.2, dmg: 2 }, { amount: 1 }],
     { name: '서치라이트', needs: 'napPillow', desc: '세 줄기 빛이 길게 뻗는다', set: { dmg: 20, amount: 3, area: 2.3 } }, { beamCol: '#ffd84d' }),
-  mousetoy: WPN('태엽 쥐 장난감', 'kitten', '태엽 쥐가 적에게 달려가 부딪힌다', { dmg: 6, cd: 0, amount: 2 },
+  mousetoy: WPN('태엽 쥐 장난감', 'kitten', '태엽 쥐가 달려가 펑 터지고 다시 감긴다', { pop: 1, dmg: 6, cd: 0, amount: 2 },
     [{ dmg: 3 }, { amount: 1 }, { speed: 0.25 }, { dmg: 4 }, { amount: 1 }, { dmg: 5, area: 0.2 }, { amount: 1 }],
     { name: '태엽 쥐 대행진', needs: 'rescueVest', desc: '여덟 마리가 몰려다닌다', set: { dmg: 22, amount: 8, speed: 1.8 } }),
-  cans: WPN('깡통 차기', 'bowl', '위로 찬 깡통이 떨어지며 뚫는다', { dmg: 16, cd: 2.4, amount: 2, pierce: 2 },
+  cans: WPN('깡통 차기', 'bowl', '찬 깡통이 맞을 때마다 통통 튀어 방향을 바꾼다', { bounce: 1, dmg: 16, cd: 2.4, amount: 2, pierce: 2 },
     [{ amount: 1 }, { dmg: 8 }, { pierce: 2 }, { amount: 1 }, { dmg: 10, area: 0.15 }, { cd: -0.15 }, { amount: 1 }],
     { name: '깡통 폭포', needs: 'leaderScarf', desc: '깡통이 쏟아져 모든 적을 뚫는다', set: { dmg: 58, pierce: 999, area: 1.6, amount: 7 } }),
-  bubblewrap: WPN('뽁뽁이 덫', 'boxtrap', '밟으면 터지는 뽁뽁이를 깐다', { dmg: 22, cd: 2.0, amount: 2 },
+  bubblewrap: WPN('뽁뽁이 덫', 'boxtrap', '주위에 둥글게 깔리고, 하나가 터지면 옆 것도 연달아 터진다', { ring: 1, dmg: 22, cd: 2.0, amount: 2 },
     [{ dmg: 8 }, { amount: 1 }, { area: 0.2 }, { dmg: 10 }, { cd: -0.15 }, { amount: 1, area: 0.2 }, { dmg: 12 }],
     { name: '뽁뽁이 지뢰밭', needs: 'stretch', desc: '크게 터지고 적을 굳힌다', set: { dmg: 70, area: 1.9, stun: 1.2, amount: 5 } }, { boomCol: '#bfe6ff' }),
-  shadowclaw: WPN('그림자 발톱', 'claw', '양옆을 동시에 할퀴는 그림자 발톱', { dmg: 13, cd: 1.3, amount: 2 },
+  shadowclaw: WPN('그림자 발톱', 'claw', '가장 가까운 적을 노려 할퀴고, 잠시 뒤 그림자가 한 번 더 할퀸다', { aim: 1, echo: 0.25, dmg: 13, cd: 1.3, amount: 2 },
     [{ dmg: 5 }, { area: 0.2 }, { amount: 1 }, { dmg: 6 }, { cd: -0.12 }, { dmg: 8, area: 0.1 }, { amount: 1 }],
     { name: '그림자 난무', needs: 'hunter', desc: '사방을 쉴 새 없이 할퀸다', set: { full: 1, cd: 0.45, dmg: 40, area: 2.1 } }),
 });
+
+/* ───────── balance pass: damage multipliers per weapon (Lv 1-8, and evolved) ─────────
+   From a bot benchmark of each weapon alone against a dense crowd: outliers pulled toward the middle. */
+GN.BAL = { tuna: 0.4, spill: 0.35, bowl: 2, static: 0.56, laser: 1.3, ball: 2.1, tailwhip: 1.5, sardine: 0.94, boxtrap: 0.65,
+  catnipcloud: 1, flowerpot: 0.41, rubber: 3, bubble: 0.71, newspaper: 1.3, camera: 0.56, flashlight: 0.55, mousetoy: 0.6, cans: 2, bubblewrap: 0.58, shadowclaw: 0.9 };
+GN.BALE = { hairball: 1.2, meow: 1.3, tuna: 0.7, spill: 0.33, static: 0.34, laser: 1.1, ball: 3, kitten: 1.3, sardine: 0.75,
+  catnipcloud: 0.77, flowerpot: 0.37, rubber: 2, bubble: 0.45, roar: 1.2, camera: 0.21, flashlight: 0.95, mousetoy: 0.82, shadowclaw: 0.62 };
 
 /* ───────── 16 more passives ───────── */
 const PAS = (name, role, desc, max = 5) => ({ name, role, desc, max });
@@ -252,4 +259,16 @@ GN.ACHS.push(
   A('boxes100', '택배 왕', '택배 상자 100개 열기', { coins: 1500 }, q => q.boxes >= 100),
   A('played8', '동네 한 바퀴', '여덟 스테이지 모두 가 보기', { coins: 1000 }, q => q.played >= 8),
 );
+
+/* ───────── economy: slower coins so upgrades, cats and furniture last ─────────
+   A bot benchmark earned 3,400 coins a run with no upgrades and 10,300 with half of them, against 81,800 of things to buy,
+   and achievements alone paid 53,900. In-run coins are cut to 30 % and achievement coins to 35 %. */
+GN.COIN_MUL = 0.3;
+GN.ADOPT_REWARD = 120;
+GN.MOM_COIN = 10;
+for (const a of GN.ACHS) if (a.rw.coins) a.rw.coins = Math.max(50, Math.round(a.rw.coins * 0.35 / 10) * 10);
+
+/* later maps hit harder, so they need upgrades */
+Object.assign(GN.STAGES.market, { hpMul: 1.08 }); Object.assign(GN.STAGES.park, { hpMul: 1.16 }); Object.assign(GN.STAGES.roof, { hpMul: 1.25 });
+Object.assign(GN.STAGES.school, { hpMul: 1.35 }); Object.assign(GN.STAGES.beach, { hpMul: 1.5 }); Object.assign(GN.STAGES.subway, { hpMul: 1.7 }); Object.assign(GN.STAGES.snow, { hpMul: 1.9 });
 })();
