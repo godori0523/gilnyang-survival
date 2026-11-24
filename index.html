@@ -87,6 +87,14 @@ body.pad .choice.ban:focus{background:var(--salmon)}
 .row{display:flex;gap:10px;flex-wrap:wrap}
 .row>.btn{flex:1 1 100px}
 .wallet{font-family:var(--display);text-align:center;font-size:15px;margin:0}
+.acct{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:0;font-size:14px;color:var(--muted)}
+.acct b{font-family:var(--display);font-weight:400;color:var(--ink)}
+.loginform{display:flex;flex-direction:column;gap:10px;margin:0}
+.loginform label{display:flex;flex-direction:column;gap:4px;font-family:var(--display);font-size:15px}
+.loginform input{font:16px var(--body);color:var(--ink);background:var(--paper-2);border:3px solid var(--ink);border-radius:12px;padding:10px 12px;min-width:0}
+.loginform input:focus{outline:3px solid var(--butter);outline-offset:1px}
+.loginform small{font-family:var(--body);font-size:13px;color:var(--muted);margin-left:4px}
+.loginerr{color:#c0392b;text-align:center;margin:0;font-size:14px}
 .wallet b{font-weight:400;background:var(--butter);border:2px solid var(--ink);border-radius:10px;padding:2px 9px;font-variant-numeric:tabular-nums}
 
 .cats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
@@ -230,8 +238,23 @@ body.pad .choice.ban:focus{background:var(--salmon)}
         <button class="btn" id="btnAch" type="button">업적</button>
       </div>
       <button class="btn small" id="btnMute" type="button">소리 켜짐</button>
+      <p class="acct" id="acctRow" hidden><span id="acctName">로그인하면 다른 기기에서도 이어서 할 수 있어요</span><button class="btn small" id="btnAcct" type="button">로그인</button></p>
       <p class="wallet">모은 동전 <b id="wallet">0</b> · <span id="best"></span></p>
       <p class="sub">키보드: WASD·방향키 이동, Space 기술, Esc 일시정지 · 터치: 화면을 누른 채 끌기, 오른쪽 아래 버튼으로 기술<br>게임패드: 왼쪽 스틱·십자키 이동, A 기술·선택, B 뒤로, Start 일시정지</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovLogin" hidden>
+    <div class="panel">
+      <h2>로그인</h2>
+      <p class="sub">처음 쓰는 아이디면 바로 새 계정이 만들어지고,<br>지금 이 기기의 기록이 그 계정으로 옮겨져요.<br>비밀번호를 잊으면 계정을 되찾을 수 없어요.</p>
+      <form class="loginform" id="loginForm" novalidate>
+        <label><span>아이디 <small>한글·영문·숫자 2~16자</small></span><input id="loginId" autocomplete="username" maxlength="16" autocapitalize="off" spellcheck="false"></label>
+        <label><span>비밀번호 <small>4자 이상</small></span><input id="loginPw" type="password" autocomplete="current-password" maxlength="64"></label>
+        <p class="loginerr" id="loginErr" role="alert" hidden></p>
+        <button class="btn primary" id="btnLoginGo" type="submit">들어가기</button>
+      </form>
+      <button class="btn" id="btnLoginBack" type="button">돌아가기</button>
     </div>
   </div>
 

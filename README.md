@@ -14,6 +14,7 @@
 | `js/content2.js` | 두 번째 콘텐츠 묶음: 고양이·무기·장신구·적·스테이지·단련·기술·가구·업적 |
 | `js/content2-art.js` | 두 번째 콘텐츠 묶음의 그림, 아이콘, 바닥 |
 | `js/game.js` | 게임 로직 전체 |
+| `functions/api/[[route]].js` | 계정 서버: 로그인·기록 저장 (Cloudflare Pages Functions + D1) |
 | `_headers` | Cloudflare Pages 캐시 설정 |
 
 ## 배포 (Cloudflare Pages)
@@ -25,6 +26,24 @@
 - Build output directory: `/`
 
 `main` 브랜치에 올라가면 자동으로 다시 배포됩니다.
+
+## 계정 (아이디·비밀번호 로그인)
+
+처음 쓰는 아이디를 넣으면 바로 계정이 만들어지고, 같은 아이디로 다시 들어오면 그 계정의 기록을 불러옵니다.
+이메일도 비밀번호 찾기도 없어서, 비밀번호를 잊으면 그 계정은 다시 쓸 수 없습니다.
+비밀번호는 솔트를 넣은 PBKDF2 해시로만 저장하고, 8번 틀리면 5분 동안 잠깁니다.
+
+기록은 이 기기에 먼저 저장되고 4초 뒤 서버에도 저장됩니다. 다른 기기에서 더 최근에 플레이했다면 시작할 때 그 기록을 받아 옵니다.
+
+서버 저장소로 Cloudflare D1 데이터베이스를 씁니다. 처음 한 번만 연결해 주면 되고, 표는 첫 요청 때 자동으로 만들어집니다.
+
+1. Cloudflare 대시보드 → Storage & Databases → D1 → Create database (이름 예: `gilnyang`)
+2. Workers & Pages → 이 Pages 프로젝트 → Settings → Bindings → Add → D1 database
+   - Variable name: `DB`
+   - D1 database: 1번에서 만든 데이터베이스
+3. Deployments → 최신 배포의 메뉴에서 Retry deployment
+
+연결 전에는 첫 화면에 로그인 줄이 나타나지 않고, 지금처럼 이 기기에만 저장됩니다.
 
 ## 로컬에서 실행
 

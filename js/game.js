@@ -24,9 +24,12 @@ const SAVE_KEY = 'gilnyang-save-v2';
 const save = { coins: 0, shop: {}, cats: ['cheese'], cat: 'cheese', skill: 'jump', stage: 'alley', endless: false, ach: {}, flags: {}, unlockAll: false, mute: false,
   home: { cats: [], adopted: [], furn: {}, companion: null, uid: 0 },
   stats: { kills: 0, coins: 0, boxes: 0, deaths: 0, runs: 0, bossKills: 0, evolved: {}, best: {}, bestLv: {}, clears: {} } };
-function loadSave() {
+const SAVE_DEFAULT = JSON.stringify(save);
+function resetSave() { const d = JSON.parse(SAVE_DEFAULT); for (const k of Object.keys(save)) delete save[k]; Object.assign(save, d); }
+function loadSave(src) {
   try {
-    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (src) resetSave();
+    const s = src || JSON.parse(localStorage.getItem(SAVE_KEY));
     if (!s) { const o = JSON.parse(localStorage.getItem('gilnyang-save-v1')); if (o && o.coins > 0) { save.coins = o.coins | 0; save.stats.coins = o.coins | 0; } return; }
     for (const k of ['coins', 'cat', 'skill', 'stage', 'endless', 'unlockAll', 'mute']) if (k in s) save[k] = s[k];
     Object.assign(save.shop, s.shop); Object.assign(save.ach, s.ach); Object.assign(save.flags, s.flags);
@@ -39,7 +42,79 @@ function loadSave() {
     if (!GN.SKILLS[save.skill]) save.skill = 'jump';
   } catch (e) { /* storage unavailable: play without saving */ }
 }
-function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
+function writeSave(localOnly) {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+  if (!localOnly && acct.token) { acct.rev++; acct.dirty = true; writeAcct(); clearTimeout(acct.timer); acct.timer = setTimeout(pushSave, 4000); acctLabel(); }
+}
+
+/* ───────── account: an id and a password, progress kept on the server (functions/api) ─────────
+   A new id makes an account on the spot and takes this device's progress with it; a known id loads that account's progress.
+   Every save is mirrored to the server a few seconds later. With no server (the claude.ai preview) the row stays hidden. */
+const ACCT_KEY = 'gilnyang-acct';
+const acct = { on: false, id: null, token: null, synced: 0, dirty: false, rev: 0, timer: 0, busy: false, state: '' };
+function readAcct() { try { const a = JSON.parse(localStorage.getItem(ACCT_KEY)); if (a && a.token) Object.assign(acct, { id: a.id, token: a.token, synced: a.synced | 0, dirty: !!a.dirty }); } catch (e) { /* ignore */ } }
+function writeAcct() { try { if (acct.token) localStorage.setItem(ACCT_KEY, JSON.stringify({ id: acct.id, token: acct.token, synced: acct.synced, dirty: acct.dirty })); else localStorage.removeItem(ACCT_KEY); } catch (e) { /* ignore */ } }
+async function api(path, opt = {}) {
+  const headers = { 'content-type': 'application/json' };
+  if (acct.token && !opt.noAuth) headers.authorization = 'Bearer ' + acct.token;
+  let r; try { r = await fetch('/api/' + path, { method: opt.method || 'GET', headers, body: opt.body ? JSON.stringify(opt.body) : undefined, keepalive: !!opt.keepalive, cache: 'no-store' }); }
+  catch (e) { const err = new Error('서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.'); err.status = 0; throw err; }
+  let j = null; try { j = await r.json(); } catch (e) { /* not json */ }
+  if (!r.ok || !j) { const err = new Error((j && j.error) || '서버에 연결할 수 없어요.'); err.status = r.status; throw err; }
+  return j;
+}
+async function pushSave(keepalive) {
+  clearTimeout(acct.timer);
+  if (!acct.token || !acct.dirty) return;
+  if (acct.busy) { acct.timer = setTimeout(pushSave, 2000); return; }
+  acct.busy = true; acct.state = 'saving'; acctLabel(); const rev = acct.rev;
+  try {
+    const j = await api('save', { method: 'PUT', body: { data: save }, keepalive: keepalive === true });
+    acct.synced = j.updated; if (acct.rev === rev) acct.dirty = false; else acct.timer = setTimeout(pushSave, 2000);
+    acct.state = ''; writeAcct();
+  } catch (e) {
+    if (e.status === 401) dropAcct('로그인이 끝났어요. 다시 로그인하면 이어서 저장돼요.');
+    else { acct.state = 'offline'; acct.timer = setTimeout(pushSave, 30000); }
+  } finally { acct.busy = false; acctLabel(); }
+}
+function dropAcct(msg) { acct.token = null; acct.id = null; acct.dirty = false; acct.state = ''; clearTimeout(acct.timer); writeAcct(); acctLabel(); if (msg) toast(msg); }
+let logoutArm = 0;
+function acctLabel() {
+  const row = $('#acctRow'); if (!row) return; row.hidden = !acct.on; if (!acct.on) return;
+  const name = $('#acctName'), b = $('#btnAcct');
+  if (!acct.token) { name.textContent = '로그인하면 다른 기기에서도 이어서 할 수 있어요'; b.textContent = '로그인'; return; }
+  const st = acct.state === 'saving' ? '저장 중…' : acct.state === 'offline' ? '연결 끊김 · 나중에 저장' : acct.dirty ? '곧 저장' : '저장됨';
+  name.textContent = ''; name.appendChild(el('b', '', acct.id)); name.appendChild(document.createTextNode(` 님 · ${st}`));
+  b.textContent = performance.now() < logoutArm ? '정말 로그아웃?' : '로그아웃';
+}
+async function doLogin(id, pw) {
+  const j = await api('login', { method: 'POST', body: { id, pw }, noAuth: true });
+  acct.id = j.id; acct.token = j.token; acct.state = '';
+  if (j.save) { loadSave(j.save.data); writeSave(true); acct.synced = j.save.updated; acct.dirty = false; }
+  else { acct.synced = 0; acct.dirty = true; acct.rev++; }
+  writeAcct(); if (acct.dirty) pushSave();
+  return j;
+}
+async function doLogout() {
+  if (acct.dirty) await pushSave();
+  try { await api('logout', { method: 'POST' }); } catch (e) { /* the token just expires */ }
+  dropAcct(); resetSave(); writeSave(true); refreshTitle(); toast('로그아웃했어요. 이 기기는 새 기록으로 시작해요.');
+}
+async function initAcct() {
+  readAcct();
+  if (!/^https?:$/.test(location.protocol)) return;               // opened as a file: no server
+  try { await api('ping', { noAuth: true }); acct.on = true; } catch (e) { acct.on = false; }
+  acctLabel(); if (!acct.on || !acct.token) return;
+  try {
+    const j = await api('save');
+    if (j.save && j.save.updated > acct.synced && !acct.dirty) {     // played on another device since: take that
+      loadSave(j.save.data); writeSave(true); acct.synced = j.save.updated; writeAcct();
+      if (state === 'title') refreshTitle();
+    } else if (!j.save || acct.dirty) { acct.dirty = true; pushSave(); }
+  } catch (e) { if (e.status === 401) dropAcct('로그인이 끝났어요. 다시 로그인해 주세요.'); else { acct.state = 'offline'; acctLabel(); } }
+}
+window.addEventListener('pagehide', () => { if (acct.dirty) pushSave(true); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && acct.dirty) pushSave(true); });
 const LOCK = { w: {}, p: {}, stage: {}, cat: {} }, ACH_BY = {};
 for (const a of ACHS) { ACH_BY[a.id] = a; if (a.rw.w) LOCK.w[a.rw.w] = a; if (a.rw.p) LOCK.p[a.rw.p] = a; if (a.rw.stage) LOCK.stage[a.rw.stage] = a; }
 for (const id in CATS) if (CATS[id].req) LOCK.cat[id] = ACH_BY[CATS[id].req];
@@ -1194,14 +1269,14 @@ function drawHomeCanvases(now) {
 }
 
 /* ───────── overlays ───────── */
-const OV = ['#ovTitle', '#ovPrep', '#ovShop', '#ovBook', '#ovAch', '#ovHome', '#ovAdopt', '#ovLevel', '#ovBox', '#ovPause', '#ovEnd'];
+const OV = ['#ovTitle', '#ovLogin', '#ovPrep', '#ovShop', '#ovBook', '#ovAch', '#ovHome', '#ovAdopt', '#ovLevel', '#ovBox', '#ovPause', '#ovEnd'];
 function show(id) {
   for (const o of OV) $(o).hidden = o !== id; input.joy = null; input.keys.clear();
   if (id) { PAD.lockT = performance.now() + 220; PAD.fresh = true; if (PAD.on) padDefault(); }
 }
 function muteLabel() { const mt = save.mute ? '소리 꺼짐' : '소리 켜짐'; $('#btnMute').textContent = mt; $('#btnMute2').textContent = mt; }
 function refreshTitle() {
-  $('#wallet').textContent = num(save.coins); muteLabel();
+  $('#wallet').textContent = num(save.coins); muteLabel(); acctLabel();
   const done = ACHS.filter(a => save.ach[a.id]).length, best = Math.max(0, ...Object.values(save.stats.best));
   $('#best').textContent = `최고 기록 ${fmtTime(best)} · 업적 ${done}/${ACHS.length}`;
   const ready = save.home.cats.filter(c => c.bond >= GN.BOND_MAX).length; $('#btnHideout').textContent = ready ? `아지트 · 입양 준비 ${ready}` : '아지트';
@@ -1423,7 +1498,7 @@ function curOverlay() { for (const o of OV) { const e = $(o); if (!e.hidden) ret
 function focusables(ov) { return ov ? [...ov.querySelectorAll('button')].filter(b => !b.disabled && b.offsetParent !== null) : []; }
 function padFocus(el) { if (!el) return; el.focus(); PAD.idx = focusables(curOverlay()).indexOf(el); }
 const PAD_DEFAULT = { ovTitle: '#btnPlay', ovPrep: '#btnStart', ovShop: '#shopList button', ovBook: '#tabW', ovAch: '#btnAchBack', ovHome: '#homeList button', ovAdopt: '#btnAdoptOk', ovLevel: '#choices .choice', ovBox: '#btnBox', ovPause: '#btnResume', ovEnd: '#btnAgain' };
-const PAD_BACK = { ovHome: '#btnHomeBack', ovAdopt: '#btnAdoptNo', ovPrep: '#btnPrepBack', ovShop: '#btnShopBack', ovBook: '#btnBookBack', ovAch: '#btnAchBack', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnHome' };
+const PAD_BACK = { ovLogin: '#btnLoginBack', ovHome: '#btnHomeBack', ovAdopt: '#btnAdoptNo', ovPrep: '#btnPrepBack', ovShop: '#btnShopBack', ovBook: '#btnBookBack', ovAch: '#btnAchBack', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnHome' };
 const PAD_START = { ovTitle: '#btnPlay', ovPrep: '#btnStart', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnAgain' };
 function padDefault() {
   const ov = curOverlay(), list = focusables(ov); if (!list.length) return;
@@ -1493,6 +1568,22 @@ window.addEventListener('keydown', () => setPadMode(false), true);
 const on = (id, fn) => $(id).addEventListener('click', fn);
 $('#btnSkill').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); initAudio(); useSkill(); });
 on('#btnPlay', () => { state = 'menu'; prepCat = save.cat; refreshPrep(); show('#ovPrep'); });
+on('#btnAcct', () => {
+  if (!acct.token) { $('#loginErr').hidden = true; $('#loginPw').value = ''; show('#ovLogin'); setTimeout(() => $('#loginId').focus(), 50); return; }
+  if (performance.now() < logoutArm) { logoutArm = 0; doLogout(); return; }
+  logoutArm = performance.now() + 3000; acctLabel(); setTimeout(acctLabel, 3100);
+});
+on('#btnLoginBack', toTitle);
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault(); const go = $('#btnLoginGo'), err = $('#loginErr'); if (go.disabled) return;
+  const id = $('#loginId').value.trim(), pw = $('#loginPw').value;
+  if (!/^[0-9A-Za-z가-힣_]{2,16}$/.test(id)) { err.textContent = '아이디는 한글·영문·숫자·_ 로 2~16자예요.'; err.hidden = false; return; }
+  if (pw.length < 4) { err.textContent = '비밀번호는 4자 이상이에요.'; err.hidden = false; return; }
+  go.disabled = true; go.textContent = '확인 중…'; err.hidden = true;
+  try { const j = await doLogin(id, pw); $('#loginPw').value = ''; toTitle(); toast(j.created ? `새 계정 '${j.id}'을 만들었어요. 지금 기록이 저장돼요.` : `'${j.id}' 계정의 기록을 불러왔어요.`); }
+  catch (x) { err.textContent = x.message; err.hidden = false; }
+  finally { go.disabled = false; go.textContent = '들어가기'; }
+});
 on('#btnPrepBack', toTitle); on('#btnStart', startRun);
 on('#btnEndless', () => { save.endless = !save.endless; writeSave(); refreshPrep(); });
 on('#btnShop', () => { state = 'menu'; refreshShop(); show('#ovShop'); }); on('#btnShopBack', toTitle); on('#btnRefund', refundShop);
@@ -1525,11 +1616,11 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 function start() {
-  loadSave(); resize(); toTitle();
+  loadSave(); resize(); toTitle(); initAcct();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const k in icoCache) delete icoCache[k]; }).catch(() => {});
   requestAnimationFrame(frame);
 }
 // test hook: lets an automated check step the simulation without waiting in real time
-window.__gilnyang = { state: () => state, run: () => G, save, step: dt => { if (state === 'play' && G) update(dt); }, pick: pickChoice, choices: () => curChoices, move: (x, y) => { input.auto = (x || y) ? { x, y } : null; }, start: startRun, spawnRescue: o => spawnRescue(o), scare: () => scareOne(), skill: () => useSkill(), openHome: () => openHome(), settle: () => settleHome(), recalc: () => recalc() };
+window.__gilnyang = { state: () => state, run: () => G, save, step: dt => { if (state === 'play' && G) update(dt); }, pick: pickChoice, choices: () => curChoices, move: (x, y) => { input.auto = (x || y) ? { x, y } : null; }, start: startRun, spawnRescue: o => spawnRescue(o), scare: () => scareOne(), skill: () => useSkill(), openHome: () => openHome(), settle: () => settleHome(), recalc: () => recalc(), write: () => writeSave() };
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();
 })();
