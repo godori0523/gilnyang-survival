@@ -37,11 +37,8 @@
 
 서버 저장소로 Cloudflare D1 데이터베이스를 씁니다. 처음 한 번만 연결해 주면 되고, 표는 첫 요청 때 자동으로 만들어집니다.
 
-1. Cloudflare 대시보드 → Storage & Databases → D1 → Create database (이름 예: `gilnyang`)
-2. Workers & Pages → 이 Pages 프로젝트 → Settings → Bindings → Add → D1 database
-   - Variable name: `DB`
-   - D1 database: 1번에서 만든 데이터베이스
-3. Deployments → 최신 배포의 메뉴에서 Retry deployment
+데이터베이스 연결은 저장소의 `wrangler.toml`에 적혀 있습니다 (`DB` → D1 데이터베이스 `gilnyang`).
+다른 데이터베이스를 쓰려면 그 파일의 `database_id`만 바꾸면 됩니다. 대시보드의 Bindings 메뉴는 쓰지 않습니다.
 
 연결 전에는 첫 화면에 로그인 줄이 나타나지 않고, 지금처럼 이 기기에만 저장됩니다.
 
