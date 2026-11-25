@@ -243,7 +243,10 @@ const ICON2 = {
   flowerpot(c) { c.beginPath(); c.moveTo(-9, -2); c.lineTo(9, -2); c.lineTo(6, 13); c.lineTo(-6, 13); c.closePath(); c.fillStyle = '#e08a5a'; c.fill(); c.stroke(); A.ell(c, -4, -8, 4, 7, '#6fcf6f', -0.4); A.ell(c, 4, -9, 4, 7, '#8fe08a', 0.4); A.dot(c, 0, -13, 3, '#ff9fb0'); },
   rubber(c) { c.beginPath(); c.ellipse(0, 0, 12, 7, 0.5, 0, TAU); A.inkStroke(c, '#ffcf5a', 3); c.beginPath(); c.ellipse(0, 0, 7, 12, 0.3, 0, TAU); A.inkStroke(c, '#ff8fb1', 2.4); },
   bubble(c) { A.ell(c, -2, 1, 11, 11, 'rgba(190,230,255,.9)'); A.thin(c, '#ffffff', 2, () => { c.beginPath(); c.arc(-2, 1, 7.5, 3.6, 4.6); c.stroke(); }); A.ell(c, 10, -9, 4, 4, 'rgba(190,230,255,.9)'); },
-  newspaper(c) { c.save(); c.rotate(-0.6); A.box(c, -5, -15, 10, 30, 4, '#f4f1e8'); A.thin(c, '#b8b3a3', 1.2, () => { for (let y = -10; y <= 10; y += 4) A.line(c, -3, y, 3, y); }); c.restore(); },
+  newspaper(c) {   // a little twister of newspaper sheets
+    A.thin(c, '#8fa6c2', 2.2, () => { for (const [y, w] of [[-12, 13], [-4, 10], [4, 7], [11, 4]]) { c.beginPath(); c.ellipse(0, y, w, w * 0.32, 0, 0.35, Math.PI * 1.75); c.stroke(); } });
+    for (const [x, y, r, s] of [[-9, -10, -0.5, 1], [10, -3, 0.6, 1], [-3, 8, 0.25, 0.8]]) { c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s); A.box(c, -4.5, -5.5, 9, 11, 2, '#f4f1e8'); A.thin(c, '#b8b3a3', 1, () => { A.line(c, -2, -2, 2, -2); A.line(c, -2, 1, 2, 1); }); c.restore(); }
+  },
   roar(c) { for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(-10, 0, 5 + i * 7, -0.95, 0.95); A.inkStroke(c, '#ff8a7a', 3.2); } },
   camera(c) { A.box(c, -6, -12, 8, 5, 1, '#4a4f63'); A.box(c, -14, -8, 28, 19, 3, '#4a4f63'); A.ell(c, 0, 1.5, 7, 7, '#9fd0ff'); A.dot(c, -2, -0.5, 2, '#ffffff'); A.ell(c, 9, -4, 2.4, 2.4, '#ffd84d'); },
   flashlight(c) { c.save(); c.rotate(-0.5); A.box(c, -15, -4, 16, 8, 2, '#4a4f63'); A.box(c, 1, -6, 5, 12, 1.5, '#9aa3b8'); c.restore(); c.save(); c.rotate(-0.5); c.beginPath(); c.moveTo(6, -6); c.lineTo(17, -12); c.lineTo(17, 12); c.lineTo(6, 6); c.closePath(); c.fillStyle = 'rgba(255,216,77,.75)'; c.fill(); c.restore(); },

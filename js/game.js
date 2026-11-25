@@ -472,6 +472,14 @@ const FIRE = {
     const p = G.p;
     for (let i = 0; i < S.amount; i++) { const a = rand(TAU), sp = 330 * S.speed; G.shots.push({ kind: 'ball', x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 10 * S.area, dmg: S.dmg, life: 4 * S.dur, rot: 0, dead: false, rico: S.rico }); }
   },
+  twister(w, S) {
+    const p = G.p, base = Math.random() * TAU;
+    for (let i = 0; i < S.amount; i++) {
+      const a = base + i / S.amount * TAU;
+      G.zones.push({ kind: 'twister', x: p.x + Math.cos(a) * 24, y: p.y + Math.sin(a) * 24, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, sp: 95 * S.speed, r: 40 * S.area, life: 3.2 * S.dur, max: 3.2 * S.dur, tick: 0.1, dmg: S.dmg, wob: rand(TAU), spin: Math.random() < 0.5 ? -1 : 1, tg: null, dead: false });
+    }
+    sfx('meow');
+  },
   tailwhip(w, S) {
     const p = G.p, wd = 130 * S.area, hh = 24 * S.area;
     if (S.vertical) {
@@ -587,12 +595,54 @@ function shotsUpdate(dt) {
     }
   }
 }
+/* a newspaper twister: wind rings widening upward, sheets of paper circling them (back half dimmed, front half on top) */
+function drawTwister(c, z, gt) {
+  const k = Math.min(1, (z.max - z.life) / 0.25, z.life / 0.4), R = z.r * k, Hh = z.r * 2 * k, sp = gt * 5 * z.spin, lean = Math.sin(z.wob) * R * 0.18;
+  const lvl = h => ({ x: z.x + lean * h, y: z.y - 4 - h * Hh, w: R * (0.22 + 0.85 * h) });
+  const sheet = (j, front) => {
+    const h = (j * 0.381 + gt * 0.45) % 1, L = lvl(h), a = sp + j * 2.39, s = Math.sin(a); if ((s > 0) !== front) return;
+    c.save(); c.globalAlpha = (front ? 1 : 0.5) * k * Math.min(1, (1 - h) * 5); c.translate(L.x + Math.cos(a) * L.w, L.y + s * L.w * 0.3); c.rotate(a * 0.8 + j); c.scale(0.7 + 0.3 * Math.abs(Math.cos(a)), 1);
+    c.fillStyle = '#f4f1e8'; c.strokeStyle = '#3b3442'; c.lineWidth = 1; c.beginPath(); c.rect(-5, -6.5, 10, 13); c.fill(); c.stroke();
+    c.strokeStyle = '#b8b3a3'; c.beginPath(); c.moveTo(-3, -3); c.lineTo(3, -3); c.moveTo(-3, 0); c.lineTo(3, 0); c.moveTo(-3, 3); c.lineTo(1, 3); c.stroke(); c.restore();
+  };
+  const N = 9 + Math.round(z.r / 12);
+  for (let j = 0; j < N; j++) sheet(j, false);
+  c.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const h = i / 5, L = lvl(h), a0 = sp * 0.8 + i * 1.1;
+    c.globalAlpha = (0.35 + 0.35 * h) * k; c.strokeStyle = '#9fb3cf'; c.lineWidth = 2.5 + h * 2;
+    c.beginPath(); c.ellipse(L.x, L.y, L.w, L.w * 0.3, 0, a0, a0 + Math.PI * 1.25); c.stroke();
+    c.globalAlpha = (0.3 + 0.3 * h) * k; c.strokeStyle = '#ffffff'; c.lineWidth = 1.4;
+    c.beginPath(); c.ellipse(L.x, L.y, L.w * 0.92, L.w * 0.27, 0, a0 + 0.4, a0 + Math.PI * 0.9); c.stroke();
+  }
+  for (let j = 0; j < N; j++) sheet(j, true);
+  c.globalAlpha = 1;
+}
 function zonesUpdate(dt) {
   for (const z of G.zones) {
     if (z.dead) continue; z.life -= dt; if (z.life <= 0) { z.dead = true; continue; }
     if (z.kind === 'puddle') {
       z.tick -= dt; if (z.tick > 0) continue; z.tick = 0.4;
       forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, z.src || 'spill'); if (z.slow) e.slow = 0.8; if (z.confuse && !e.T.boss) e.confuse = 0.9; } });
+    } else if (z.kind === 'twister') {
+      const p = G.p;
+      if (!z.tg || z.tg.dead || Math.random() < dt * 0.5) z.tg = randTarget(300);
+      let ax = z.tg ? z.tg.x - z.x : 0, ay = z.tg ? z.tg.y - z.y : 0; const am = Math.hypot(ax, ay) || 1; ax /= am; ay /= am;
+      const pd = Math.hypot(p.x - z.x, p.y - z.y) || 1; if (pd > 280) { ax += (p.x - z.x) / pd * 1.5; ay += (p.y - z.y) / pd * 1.5; }   // stay near the cat
+      else if (pd < 150) { ax -= (p.x - z.x) / pd * 2.5; ay -= (p.y - z.y) / pd * 2.5; }   // but never drag the crowd onto it
+      z.wob += dt * 2.4; ax += Math.cos(z.wob) * 0.7; ay += Math.sin(z.wob * 1.3) * 0.7;
+      const m = Math.hypot(ax, ay) || 1, kk = Math.min(1, 2 * dt); z.vx += (ax / m * z.sp - z.vx) * kk; z.vy += (ay / m * z.sp - z.vy) * kk;
+      z.x += z.vx * dt; z.y += z.vy * dt;
+      const RR = z.r * 1.7;
+      forNear(z.x, z.y, RR, e => {
+        if (e.T.prop || e.T.boss || e.heavy) return;
+        const dx = z.x - e.x, dy = z.y - e.y, d = Math.hypot(dx, dy) || 1; if (d > RR + e.r) return;
+        const pull = Math.min(Math.max(0, d - 8), 120 * dt), swirl = 90 * dt * z.spin;
+        e.x += dx / d * pull - dy / d * swirl; e.y += dy / d * pull + dx / d * swirl;
+      });
+      z.tick -= dt; if (z.tick > 0) continue; z.tick = 0.5;
+      forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) hurt(e, z.dmg, z.src || 'newspaper'); });
+      if (Math.random() < 0.7) part({ k: 'chip', x: z.x + rand(-z.r, z.r) * 0.6, y: z.y, z: rand(10, z.r * 1.5), vx: rand(-90, 90), vy: rand(-40, 40), vz: rand(60, 160), rot: rand(TAU), vr: rand(-12, 12), sz: rand(5, 8), col: '#f4f1e8', life: 0.9 });
     } else {
       z.arm -= dt; if (z.arm > 0) continue; let hit = false;
       forNear(z.x, z.y, z.r, e => { if (!hit && !e.T.prop && Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) hit = true; });
@@ -1008,6 +1058,7 @@ function render(now) {
   for (const z of G.zones) {
     if (!inView(z.x, z.y, 120)) continue;
     if (z.kind === 'puddle') { const k = Math.min(1, (z.max - z.life) / 0.2, z.life / 0.3); c.globalAlpha = (z.col ? 0.5 : 0.8) * k; pen(c, 1.2); ell(c, z.x, z.y, z.r * k, z.r * k * 0.72, z.col || (z.slow ? '#e9f4ff' : '#ffffff')); c.globalAlpha = 1; }
+    else if (z.kind === 'twister') { const k = Math.min(1, (z.max - z.life) / 0.25, z.life / 0.4); c.fillStyle = 'rgba(42,39,51,.18)'; c.beginPath(); c.ellipse(z.x, z.y, z.r * 0.75 * k, z.r * 0.26 * k, 0, 0, TAU); c.fill(); }
     else drawIco(c, z.ico || 'boxtrap', z.x, z.y, 34);
   }
   for (const f of G.fx) {
@@ -1074,6 +1125,7 @@ function render(now) {
     else if (s.kind === 'ball') drawIco(c, s.ico || 'ball', s.x, s.y, s.r * 3.6, s.rot);
     else drawIco(c, s.ico || 'sardine', s.x, s.y, 34, Math.atan2(s.vy, s.vx));
   }
+  for (const z of G.zones) if (z.kind === 'twister' && !z.dead && inView(z.x, z.y, 140)) drawTwister(c, z, gt);
   c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.6; for (const b of G.ebul) c.drawImage(glowSprite('#ff5a5a'), b.x - 18, b.y - 18, 36, 36); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
   pen(c, 1.3);
   for (const b of G.ebul) ell(c, b.x, b.y, b.r, b.r, COL.salmon);
