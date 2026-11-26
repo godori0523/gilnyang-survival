@@ -1527,7 +1527,7 @@ function startRun() {
 /* ───────── developer mode: a boss practice range ─────────
    Opened by tapping the title five times (or #dev in the address) and entering the developer passcode once per device.
    Only the passcode's SHA-256 is in the code. The practice run never touches coins, records or achievements. */
-const DEV_HASH = '1b3a6ad7ae0fe2eca8f24759bfe4cc3cdc46d173ee2da8a296c25f25eff0c4ac', DEV_KEY = 'gilnyang-dev', DEV_CFG = 'gilnyang-dev-cfg';
+const DEV_HASH = '72e05755c901137040bae84f76ec7349baf97e1057c54dc8a044617465907265', DEV_KEY = 'gilnyang-dev', DEV_CFG = 'gilnyang-dev-cfg';
 const BOSSES = Object.keys(ENEMIES).filter(id => ENEMIES[id].boss);
 const bossStage = id => Object.keys(STAGES).find(s => STAGES[s].boss === id) || 'alley';
 const DEV = { on: false, taps: [], last: null, cfg: { cat: 'cheese', skill: 'jump', boss: BOSSES[0], phase: 1, god: true, mobs: false, shop: false, w: { claw: 8 }, e: {}, p: {} } };
