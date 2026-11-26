@@ -94,6 +94,20 @@ body.pad .choice.ban:focus{background:var(--salmon)}
 .loginform input{font:16px var(--body);color:var(--ink);background:var(--paper-2);border:3px solid var(--ink);border-radius:12px;padding:10px 12px;min-width:0}
 .loginform input:focus{outline:3px solid var(--butter);outline-offset:1px}
 .loginform small{font-family:var(--body);font-size:13px;color:var(--muted);margin-left:4px}
+.devtag{font-family:var(--body);font-size:12px;background:var(--ink);color:var(--paper);border-radius:7px;padding:2px 7px;vertical-align:middle}
+.devgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.devgrid label{display:flex;flex-direction:column;gap:3px;font-family:var(--display);font-size:14px;min-width:0}
+.devgrid select{font:15px var(--body);color:var(--ink);background:var(--paper-2);border:2px solid var(--ink);border-radius:10px;padding:6px 8px;min-width:0;width:100%}
+.devrow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center}
+.devrow canvas{width:34px;height:34px;border:2px solid var(--ink);border-radius:9px;background:var(--paper-2)}
+.devrow.on canvas{background:var(--butter)}
+.devrow .nm{font-size:15px}.devrow small{display:block;font-size:12px;color:var(--muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.devctl{display:flex;align-items:center;gap:4px}
+.devctl .btn.small{min-width:30px;padding:4px 7px}
+.devctl b{font-family:var(--display);font-weight:400;min-width:38px;text-align:center;font-variant-numeric:tabular-nums}
+.devres{background:var(--paper-2);border:2px solid var(--ink);border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.5}
+.devres strong{font-family:var(--display);font-weight:400;font-size:18px}
+.devres .bar{margin:2px 0 4px}
 .loginerr{color:#c0392b;text-align:center;margin:0;font-size:14px}
 .wallet b{font-weight:400;background:var(--butter);border:2px solid var(--ink);border-radius:10px;padding:2px 9px;font-variant-numeric:tabular-nums}
 
@@ -237,7 +251,7 @@ body.pad .choice.ban:focus{background:var(--salmon)}
         <button class="btn" id="btnBook" type="button">도감</button>
         <button class="btn" id="btnAch" type="button">업적</button>
       </div>
-      <button class="btn small" id="btnMute" type="button">소리 켜짐</button>
+      <div class="row"><button class="btn small" id="btnMute" type="button">소리 켜짐</button><button class="btn small" id="btnDev" type="button" hidden>보스 연습장 (개발자)</button></div>
       <p class="acct" id="acctRow" hidden><span id="acctName">로그인하면 다른 기기에서도 이어서 할 수 있어요</span><button class="btn small" id="btnAcct" type="button">로그인</button></p>
       <p class="wallet">모은 동전 <b id="wallet">0</b> · <span id="best"></span></p>
       <p class="sub">키보드: WASD·방향키 이동, Space 기술, Esc 일시정지 · 터치: 화면을 누른 채 끌기, 오른쪽 아래 버튼으로 기술<br>게임패드: 왼쪽 스틱·십자키 이동, A 기술·선택, B 뒤로, Start 일시정지</p>
@@ -255,6 +269,47 @@ body.pad .choice.ban:focus{background:var(--salmon)}
         <button class="btn primary" id="btnLoginGo" type="submit">들어가기</button>
       </form>
       <button class="btn" id="btnLoginBack" type="button">돌아가기</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovDevGate" hidden>
+    <div class="panel">
+      <h2>개발자 모드</h2>
+      <p class="sub">개발자 암호를 넣으면 이 기기에서 보스 연습장이 열려요.</p>
+      <form class="loginform" id="devGateForm" novalidate>
+        <label><span>암호</span><input id="devPass" type="password" autocomplete="off" maxlength="64"></label>
+        <p class="loginerr" id="devGateErr" role="alert" hidden></p>
+        <button class="btn primary" type="submit">열기</button>
+      </form>
+      <button class="btn" id="btnDevGateBack" type="button">돌아가기</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovDev" hidden>
+    <div class="panel">
+      <h2>보스 연습장 <span class="devtag">개발자</span></h2>
+      <p class="sub">무기와 장신구 레벨을 직접 정하고 보스 하나와 싸워요. 기록·동전·업적에는 남지 않아요.</p>
+      <div class="devres" id="devRes" hidden></div>
+      <div class="devgrid">
+        <label>고양이<select id="devCat"></select></label>
+        <label>기술<select id="devSkill"></select></label>
+        <label>보스<select id="devBoss"></select></label>
+        <label>보스 단계<select id="devPhase"><option value="1">1차 · 10분 ×1</option><option value="2">2차 · 20분 ×2.6</option><option value="3">최종 · 30분 ×5</option></select></label>
+      </div>
+      <div class="row">
+        <button class="btn small" id="devGod" type="button">무적</button>
+        <button class="btn small" id="devMobs" type="button">잡몹</button>
+        <button class="btn small" id="devShop" type="button">단련 적용</button>
+      </div>
+      <div class="row">
+        <button class="btn small" id="devAll8" type="button">고른 무기 전부 Lv 8</button>
+        <button class="btn small" id="devClear" type="button">전부 비우기</button>
+      </div>
+      <div class="list scroll" id="devList"></div>
+      <div class="row">
+        <button class="btn" id="btnDevBack" type="button">돌아가기</button>
+        <button class="btn primary" id="btnDevGo" type="button">보스 전투 시작</button>
+      </div>
     </div>
   </div>
 

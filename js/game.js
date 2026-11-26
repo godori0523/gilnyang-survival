@@ -119,7 +119,8 @@ const LOCK = { w: {}, p: {}, stage: {}, cat: {} }, ACH_BY = {};
 for (const a of ACHS) { ACH_BY[a.id] = a; if (a.rw.w) LOCK.w[a.rw.w] = a; if (a.rw.p) LOCK.p[a.rw.p] = a; if (a.rw.stage) LOCK.stage[a.rw.stage] = a; }
 for (const id in CATS) if (CATS[id].req) LOCK.cat[id] = ACH_BY[CATS[id].req];
 const unlocked = (kind, id) => save.unlockAll || !LOCK[kind][id] || !!save.ach[LOCK[kind][id].id];
-const shopLv = id => save.shop[id] || 0;
+let devNoShop = false;                          // the practice range can switch permanent upgrades off
+const shopLv = id => devNoShop ? 0 : save.shop[id] || 0;
 
 /* ───────── sound ───────── */
 let AC = null; const sfxAt = {};
@@ -319,6 +320,7 @@ function buildWave(m) {
 }
 function waveType() { let r = rand(G.wave.reduce((s, x) => s + x[1], 0)); for (const x of G.wave) { r -= x[1]; if (r <= 0) return x[0]; } return G.wave[0][0]; }
 function spawnUpdate(dt) {
+  if (G.dev && !G.dev.mobs) return;
   const t = G.t, p = G.p, m = Math.floor(t / 60), R = G.stage.roster;
   if (m !== G.waveMin) { G.waveMin = m; buildWave(m); }
   const bossAlive = G.boss && !G.boss.dead;
@@ -354,6 +356,7 @@ function hurt(e, base, src, kx = 0, ky = 0, crit = false) {
   const P = G.p; if (!crit && P.crit && src !== 'squad' && Math.random() < P.crit) crit = true;
   const dmg = Math.max(1, Math.round(base * P.might * rand(0.9, 1.1) * (crit ? 2 + P.critDmg : 1) * (e.elite || e.T.boss ? 1 + P.bossDmg : 1) * (P.berserk && P.hp < P.maxHp * 0.5 ? 1 + P.berserk : 1)));
   e.hp -= dmg; e.flash = 0.09; e.hitT = 0.14; fxHit(e, kx, ky, crit); G.dmgBy[src] = (G.dmgBy[src] || 0) + Math.min(dmg, e.hp + dmg);
+  if (G.dev && e === G.boss) G.dev.bossBy[src] = (G.dev.bossBy[src] || 0) + Math.min(dmg, e.hp + dmg);
   if (!e.heavy) { e.kx += kx * P.knock; e.ky += ky * P.knock; }
   addNum(e.x, e.y - e.r, dmg, crit); sfx('hit');
   if (e.hp <= 0) { kill(e); return true; }
@@ -373,6 +376,7 @@ function kill(e) {
   fxKill(e);
   if (T.prop) { const r = Math.random(); drop(r < 0.4 ? 'churu' : r < 0.65 ? 'bag' : r < 0.8 ? 'bell' : r < 0.9 ? 'hiss' : 'clock', e.x, e.y, 10); return; }
   G.kills++; if (p.leech) p.hp = Math.min(p.maxHp, p.hp + p.leech);
+  if (T.boss && G.dev) { G.dev.killT = G.t; G.won = true; G.endT = G.t + 1.5; G.shake = 16; sfx('boom'); banner(T.name + ' 격파!'); for (const o of G.enemies) if (!o.dead && o !== e) o.dead = true; return; }
   if (T.boss) {
     G.bossKills++; G.shake = 16; sfx('boom'); drop('box', e.x, e.y); drop('bag', e.x + 20, e.y, 50); drop('churu', e.x - 20, e.y);
     if (G.bossN >= 3 && !G.cleared) { G.cleared = true; save.stats.clears[G.stageId] = (save.stats.clears[G.stageId] || 0) + 1; }
@@ -389,6 +393,7 @@ function kill(e) {
 }
 function hurtPlayer(d) {
   const p = G.p; if (p.inv > 0 || G.endT >= 0 || p.jump || p.hide > 0) return;
+  if (G.dev) { G.dev.hits++; G.dev.taken += Math.max(1, d - p.armor); if (G.dev.god) { p.inv = 0.55; G.vig = 0.6; return; } }
   if (p.dodge && Math.random() < p.dodge) { p.inv = 0.25; addNum(p.x, p.y - 22, '피함'); return; }
   if (p.shieldCd && G.shieldT <= 0) { G.shieldT = p.shieldCd; p.inv = 0.5; G.fx.push({ type: 'ring', x: p.x, y: p.y, r: 34, t: 0, life: 0.35, col: '#9fd0ff' }); sfx('box'); return; }
   if (p.thorns) forNear(p.x, p.y, 80, e => { if (!e.T.prop && Math.hypot(e.x - p.x, e.y - p.y) < 80 + e.r) hurt(e, 8 * p.thorns * (1 + G.level * 0.03), 'thorns'); });
@@ -1001,6 +1006,7 @@ function rewardText(a) {
   return out.join(', ');
 }
 function checkAchs() {
+  if (G && G.dev) return;                        // practice runs never count
   const q = achQ(); let any = false;
   for (const a of ACHS) {
     if (save.ach[a.id]) continue; let ok = false; try { ok = a.test(q); } catch (e) { ok = false; }
@@ -1321,14 +1327,14 @@ function drawHomeCanvases(now) {
 }
 
 /* ───────── overlays ───────── */
-const OV = ['#ovTitle', '#ovLogin', '#ovPrep', '#ovShop', '#ovBook', '#ovAch', '#ovHome', '#ovAdopt', '#ovLevel', '#ovBox', '#ovPause', '#ovEnd'];
+const OV = ['#ovTitle', '#ovLogin', '#ovDevGate', '#ovDev', '#ovPrep', '#ovShop', '#ovBook', '#ovAch', '#ovHome', '#ovAdopt', '#ovLevel', '#ovBox', '#ovPause', '#ovEnd'];
 function show(id) {
   for (const o of OV) $(o).hidden = o !== id; input.joy = null; input.keys.clear();
   if (id) { PAD.lockT = performance.now() + 220; PAD.fresh = true; if (PAD.on) padDefault(); }
 }
 function muteLabel() { const mt = save.mute ? '소리 꺼짐' : '소리 켜짐'; $('#btnMute').textContent = mt; $('#btnMute2').textContent = mt; }
 function refreshTitle() {
-  $('#wallet').textContent = num(save.coins); muteLabel(); acctLabel();
+  $('#wallet').textContent = num(save.coins); muteLabel(); acctLabel(); $('#btnDev').hidden = !DEV.on;
   const done = ACHS.filter(a => save.ach[a.id]).length, best = Math.max(0, ...Object.values(save.stats.best));
   $('#best').textContent = `최고 기록 ${fmtTime(best)} · 업적 ${done}/${ACHS.length}`;
   const ready = save.home.cats.filter(c => c.bond >= GN.BOND_MAX).length; $('#btnHideout').textContent = ready ? `아지트 · 입양 준비 ${ready}` : '아지트';
@@ -1483,6 +1489,7 @@ function pause() {
 }
 function resume() { state = 'play'; show(null); last = performance.now(); const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur(); }
 function finish() {
+  if (G.dev) { devFinish(); return; }
   state = 'over'; const won = G.won, S = save.stats, gain = Math.floor(G.coins) + (won ? 200 : 0), sid = G.stageId;
   S.best[sid] = Math.max(S.best[sid] || 0, G.t); S.bestLv[sid] = Math.max(S.bestLv[sid] || 0, G.level); S.runs++;
   if (!won && !G.quit) S.deaths++;
@@ -1517,6 +1524,90 @@ function startRun() {
   initAudio(); if (AC && AC.state === 'suspended') AC.resume();
   newRun(); renderSlots(); for (const k in hudCache) delete hudCache[k]; drawSkillIcon(); setHud(true); updateHud(); resume();
 }
+/* ───────── developer mode: a boss practice range ─────────
+   Opened by tapping the title five times (or #dev in the address) and entering the developer passcode once per device.
+   Only the passcode's SHA-256 is in the code. The practice run never touches coins, records or achievements. */
+const DEV_HASH = '1b3a6ad7ae0fe2eca8f24759bfe4cc3cdc46d173ee2da8a296c25f25eff0c4ac', DEV_KEY = 'gilnyang-dev', DEV_CFG = 'gilnyang-dev-cfg';
+const BOSSES = Object.keys(ENEMIES).filter(id => ENEMIES[id].boss);
+const bossStage = id => Object.keys(STAGES).find(s => STAGES[s].boss === id) || 'alley';
+const DEV = { on: false, taps: [], last: null, cfg: { cat: 'cheese', skill: 'jump', boss: BOSSES[0], phase: 1, god: true, mobs: false, shop: false, w: { claw: 8 }, e: {}, p: {} } };
+try { DEV.on = localStorage.getItem(DEV_KEY) === DEV_HASH; const c = JSON.parse(localStorage.getItem(DEV_CFG)); if (c) Object.assign(DEV.cfg, c); } catch (e) { /* storage blocked */ }
+const dbtn = (text, cls, fn, dis) => { const b = el('button', 'btn ' + cls, text); b.type = 'button'; b.disabled = !!dis; b.addEventListener('click', fn); return b; };
+function devSaveCfg() { try { localStorage.setItem(DEV_CFG, JSON.stringify(DEV.cfg)); } catch (e) { /* ignore */ } }
+async function sha256(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function devGate() { if (DEV.on) { openDev(); return; } $('#devPass').value = ''; $('#devGateErr').hidden = true; show('#ovDevGate'); setTimeout(() => $('#devPass').focus(), 50); }
+function devCount(kind) { const C = DEV.cfg; return Object.values(kind === 'w' ? C.w : C.p).filter(v => v > 0).length; }
+function openDev() { state = 'menu'; G = null; setHud(false); refreshDev(); show('#ovDev'); }
+function refreshDev() {
+  const C = DEV.cfg;
+  if (!CATS[C.cat]) C.cat = 'cheese'; if (!GN.SKILLS[C.skill]) C.skill = 'jump'; if (!ENEMIES[C.boss]) C.boss = BOSSES[0];
+  const fillSel = (sel, items, val) => { const s = $(sel); if (!s.options.length) for (const [v, t] of items) { const o = el('option', '', t); o.value = v; s.appendChild(o); } s.value = val; };
+  fillSel('#devCat', Object.keys(CATS).map(id => [id, CATS[id].name]), C.cat);
+  fillSel('#devSkill', Object.keys(GN.SKILLS).map(id => [id, GN.SKILLS[id].name]), C.skill);
+  fillSel('#devBoss', BOSSES.map(id => [id, `${ENEMIES[id].name} · ${STAGES[bossStage(id)].name}`]), C.boss);
+  $('#devPhase').value = String(C.phase);
+  const tog = (id, on, label) => { const b = $(id); b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); b.textContent = `${label}: ${on ? '켬' : '끔'}`; };
+  tog('#devGod', C.god, '무적'); tog('#devMobs', C.mobs, '잡몹'); tog('#devShop', C.shop, '단련 적용');
+  const box = $('#devList'), top = box.scrollTop; box.textContent = '';
+  const nW = devCount('w'), nP = devCount('p');
+  box.appendChild(el('div', 'grouphead', `무기 ${nW}/${MAXW}`));
+  for (const id of Object.keys(WEAPONS)) {
+    const D = WEAPONS[id], lv = C.w[id] || 0, evo = !!C.e[id] && lv >= WMAX, r = el('div', 'devrow' + (lv ? ' on' : ''));
+    r.appendChild(mkIcon(id, 34)); const t = el('div'); t.appendChild(el('div', 'nm', evo ? D.evo.name : D.name)); t.appendChild(el('small', '', D.evo ? `진화: ${D.evo.name} (${PASSIVES[D.evo.needs] ? PASSIVES[D.evo.needs].name : D.evo.needs} 필요)` : D.desc)); r.appendChild(t);
+    const ctl = el('div', 'devctl');
+    ctl.appendChild(dbtn('−', 'small', () => { C.w[id] = Math.max(0, lv - 1); if (C.w[id] < WMAX) delete C.e[id]; devSaveCfg(); refreshDev(); }, lv <= 0));
+    ctl.appendChild(el('b', '', lv ? (evo ? '진화' : 'Lv ' + lv) : '-'));
+    ctl.appendChild(dbtn('+', 'small', () => { C.w[id] = lv + 1; devSaveCfg(); refreshDev(); }, lv >= WMAX || (!lv && nW >= MAXW)));
+    if (D.evo) ctl.appendChild(dbtn('진화', 'small' + (evo ? ' sel' : ''), () => { if (evo) delete C.e[id]; else C.e[id] = true; devSaveCfg(); refreshDev(); }, lv < WMAX));
+    r.appendChild(ctl); box.appendChild(r);
+  }
+  box.appendChild(el('div', 'grouphead', `장신구 ${nP}/${MAXP}`));
+  for (const id of Object.keys(PASSIVES)) {
+    const P = PASSIVES[id], lv = C.p[id] || 0, r = el('div', 'devrow' + (lv ? ' on' : ''));
+    r.appendChild(mkIcon(id, 34)); const t = el('div'); t.appendChild(el('div', 'nm', P.name)); t.appendChild(el('small', '', P.desc)); r.appendChild(t);
+    const ctl = el('div', 'devctl');
+    ctl.appendChild(dbtn('−', 'small', () => { C.p[id] = Math.max(0, lv - 1); devSaveCfg(); refreshDev(); }, lv <= 0));
+    ctl.appendChild(el('b', '', lv ? `${lv}/${P.max}` : '-'));
+    ctl.appendChild(dbtn('+', 'small', () => { C.p[id] = lv + 1; devSaveCfg(); refreshDev(); }, lv >= P.max || (!lv && nP >= MAXP)));
+    r.appendChild(ctl); box.appendChild(r);
+  }
+  box.scrollTop = top;
+  const res = $('#devRes'), L = DEV.last; res.hidden = !L; res.textContent = '';
+  if (L) {
+    res.appendChild(el('strong', '', L.won ? `${L.boss} 격파 · ${fmtTime(L.time)}` : L.dead ? `쓰러짐 · ${fmtTime(L.time)} 버팀` : `그만둠 · ${fmtTime(L.time)}`));
+    res.appendChild(el('div', '', `보스 체력 ${L.won ? 0 : Math.round(L.hpLeft * 100)}% 남음 · 보스 최대 체력 ${num(Math.round(L.maxHp))} · 초당 피해 ${num(Math.round(L.dps))}`));
+    res.appendChild(el('div', '', `맞은 횟수 ${L.hits} · 받은 피해 ${num(Math.round(L.taken))}${L.god ? ' (무적이라 실제로는 안 깎임)' : ''} · 최대 체력 ${L.maxPHp}`));
+    if (L.dmg.length) res.appendChild(el('div', 'grouphead', '보스에게 준 피해'));
+    for (const [id, v] of L.dmg.slice(0, 8)) { const nm = WEAPONS[id] ? WEAPONS[id].name : id === 'squad' ? '무리 고양이' : id === 'thorns' ? '가시 목도리' : id; const row = el('div'); row.appendChild(el('div', '', `${nm} · ${num(Math.round(v))} (${Math.round(v / L.total * 100)}%)`)); const b = el('div', 'bar'); const i = el('i'); i.style.width = (v / L.dmg[0][1] * 100) + '%'; b.appendChild(i); row.appendChild(b); res.appendChild(row); }
+  }
+}
+function startDev() {
+  const C = DEV.cfg, keep = { cat: save.cat, skill: save.skill, stage: save.stage, endless: save.endless, comp: save.home.companion };
+  initAudio(); if (AC && AC.state === 'suspended') AC.resume();
+  save.cat = C.cat; save.skill = C.skill; save.stage = bossStage(C.boss); save.endless = false; save.home.companion = null;
+  devNoShop = !C.shop;
+  try { newRun(); } finally { save.cat = keep.cat; save.skill = keep.skill; save.stage = keep.stage; save.endless = keep.endless; save.home.companion = keep.comp; }
+  const p = G.p, T0 = [600, 1200, 1800][C.phase - 1];
+  G.dev = { god: C.god, mobs: C.mobs, shop: C.shop, hits: 0, taken: 0, start: T0, killT: 0, bossBy: {} };
+  p.weapons.length = 0; p.passives.length = 0; G.squad = [];
+  for (const id of Object.keys(C.w)) if (C.w[id] > 0 && WEAPONS[id]) p.weapons.push({ id, lv: Math.min(WMAX, C.w[id]), evo: !!C.e[id] && C.w[id] >= WMAX && !!WEAPONS[id].evo, t: 0.4, ang: 0, burst: 0, bt: 0, tt: 0, pets: [], S: null });
+  for (const id of Object.keys(C.p)) if (C.p[id] > 0 && PASSIVES[id]) p.passives.push({ id, lv: Math.min(PASSIVES[id].max, C.p[id]) });
+  recalc(); p.hp = p.maxHp;
+  G.need = Infinity; G.pendingLv = 0; G.t = T0; G.waveMin = -1;
+  G.nextBoss = G.nextElite = G.nextProp = G.nextRescue = G.nextHorde = 1e9; G.nextSwarm = T0 + 45; G.nextDash = C.mobs ? T0 + 20 : 1e9;
+  G.bossN = C.phase; const b = spawn(C.boss, { hpMul: [1, 2.6, 5][C.phase - 1], dist: 340 }); b.final = false; G.boss = b;
+  renderSlots(); for (const k in hudCache) delete hudCache[k]; drawSkillIcon(); setHud(true); updateHud(); resume();
+  banner(ENEMIES[C.boss].name + ' 등장!'); sfx('warn');
+}
+function devFinish() {
+  devNoShop = false;
+  const D = G.dev, b = G.boss, end = D.killT || G.t, time = Math.max(0.1, end - D.start);
+  const dmg = Object.entries(D.bossBy).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]), total = dmg.reduce((a, [, v]) => a + v, 0) || 1;
+  const bossDmg = b ? b.maxHp - Math.max(0, b.hp) : 0;
+  DEV.last = { won: G.won, dead: !G.won && !G.quit, boss: b ? b.T.name : '', time, hpLeft: b ? Math.max(0, b.hp) / b.maxHp : 0, maxHp: b ? b.maxHp : 0, dps: bossDmg / time, hits: D.hits, taken: D.taken, god: D.god, maxPHp: G.p.maxHp, dmg, total };
+  if (G.won) sfx('win');
+  openDev(); $('#devList').scrollTop = 0; $('#ovDev .panel').scrollIntoView && $('#ovDev').scrollTo(0, 0);
+}
 function toggleMute() { save.mute = !save.mute; writeSave(); muteLabel(); }
 
 /* ───────── input ───────── */
@@ -1550,7 +1641,7 @@ function curOverlay() { for (const o of OV) { const e = $(o); if (!e.hidden) ret
 function focusables(ov) { return ov ? [...ov.querySelectorAll('button')].filter(b => !b.disabled && b.offsetParent !== null) : []; }
 function padFocus(el) { if (!el) return; el.focus(); PAD.idx = focusables(curOverlay()).indexOf(el); }
 const PAD_DEFAULT = { ovTitle: '#btnPlay', ovPrep: '#btnStart', ovShop: '#shopList button', ovBook: '#tabW', ovAch: '#btnAchBack', ovHome: '#homeList button', ovAdopt: '#btnAdoptOk', ovLevel: '#choices .choice', ovBox: '#btnBox', ovPause: '#btnResume', ovEnd: '#btnAgain' };
-const PAD_BACK = { ovLogin: '#btnLoginBack', ovHome: '#btnHomeBack', ovAdopt: '#btnAdoptNo', ovPrep: '#btnPrepBack', ovShop: '#btnShopBack', ovBook: '#btnBookBack', ovAch: '#btnAchBack', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnHome' };
+const PAD_BACK = { ovLogin: '#btnLoginBack', ovDevGate: '#btnDevGateBack', ovDev: '#btnDevBack', ovHome: '#btnHomeBack', ovAdopt: '#btnAdoptNo', ovPrep: '#btnPrepBack', ovShop: '#btnShopBack', ovBook: '#btnBookBack', ovAch: '#btnAchBack', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnHome' };
 const PAD_START = { ovTitle: '#btnPlay', ovPrep: '#btnStart', ovPause: '#btnResume', ovBox: '#btnBox', ovEnd: '#btnAgain' };
 function padDefault() {
   const ov = curOverlay(), list = focusables(ov); if (!list.length) return;
@@ -1626,6 +1717,23 @@ on('#btnAcct', () => {
   logoutArm = performance.now() + 3000; acctLabel(); setTimeout(acctLabel, 3100);
 });
 on('#btnLoginBack', toTitle);
+document.querySelector('#ovTitle h1').addEventListener('click', () => {
+  const now = performance.now(); DEV.taps = DEV.taps.filter(t => now - t < 2500); DEV.taps.push(now);
+  if (DEV.taps.length >= 5) { DEV.taps = []; devGate(); }
+});
+on('#btnDev', devGate); on('#btnDevGateBack', toTitle); on('#btnDevBack', toTitle);
+$('#devGateForm').addEventListener('submit', async e => {
+  e.preventDefault(); const err = $('#devGateErr');
+  let ok = false; try { ok = await sha256($('#devPass').value) === DEV_HASH; } catch (x) { err.textContent = '이 브라우저에서는 확인할 수 없어요 (https 주소에서 열어 주세요).'; err.hidden = false; return; }
+  if (!ok) { err.textContent = '암호가 달라요.'; err.hidden = false; return; }
+  DEV.on = true; try { localStorage.setItem(DEV_KEY, DEV_HASH); } catch (x) { /* this session only */ } refreshTitle(); openDev();
+});
+for (const [id, key] of [['#devCat', 'cat'], ['#devSkill', 'skill'], ['#devBoss', 'boss']]) $(id).addEventListener('change', e => { DEV.cfg[key] = e.target.value; devSaveCfg(); });
+$('#devPhase').addEventListener('change', e => { DEV.cfg.phase = +e.target.value; devSaveCfg(); });
+for (const [id, key] of [['#devGod', 'god'], ['#devMobs', 'mobs'], ['#devShop', 'shop']]) on(id, () => { DEV.cfg[key] = !DEV.cfg[key]; devSaveCfg(); refreshDev(); });
+on('#devAll8', () => { for (const id in DEV.cfg.w) if (DEV.cfg.w[id] > 0) DEV.cfg.w[id] = WMAX; devSaveCfg(); refreshDev(); });
+on('#devClear', () => { DEV.cfg.w = {}; DEV.cfg.e = {}; DEV.cfg.p = {}; devSaveCfg(); refreshDev(); });
+on('#btnDevGo', () => { if (!devCount('w')) { toast('무기를 하나 이상 골라 주세요.'); return; } startDev(); });
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault(); const go = $('#btnLoginGo'), err = $('#loginErr'); if (go.disabled) return;
   const id = $('#loginId').value.trim(), pw = $('#loginPw').value;
@@ -1669,6 +1777,7 @@ function frame(now) {
 }
 function start() {
   loadSave(); resize(); toTitle(); initAcct();
+  if (location.hash === '#dev') devGate();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const k in icoCache) delete icoCache[k]; }).catch(() => {});
   requestAnimationFrame(frame);
 }
