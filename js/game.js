@@ -1310,7 +1310,7 @@ function fxKill(e) {
 const TRAIL = { hairball: '#ffe2bd', fishbone: '#dff1ff', bone: '#dff1ff', lob: '#cfe9ff', ball: '#ffb3b3', homing: '#ffd27a' };
 function partsUpdate(dt) {
   G.trailT += dt;
-  if (G.trailT > 0.03) { G.trailT = 0; for (const s of G.shots) { if (G.parts.length > PART_MAX - 80) break; const col = TRAIL[s.kind === 'hair' ? (s.ico || 'hairball') : s.kind]; if (col) part({ k: 'glow', x: s.x, y: s.y, r: s.r * 1.8, col, life: 0.2, a: 0.45 }); } }
+  if (G.trailT > 0.03) { G.trailT = 0; for (const s of G.shots) { if (G.parts.length > PART_MAX - 80) break; const col = TRAIL[s.kind === 'hair' ? (s.ico || 'hairball') : s.kind]; if (!col) continue; const big = s.r > 20; if (big && Math.hypot(s.x - G.p.x, s.y - G.p.y) < 90) continue; part({ k: 'glow', x: s.x, y: s.y, r: Math.min(s.r * 1.8, big ? 26 : 34), col, life: 0.2, a: big ? 0.16 : 0.45 }); } }   // big shots keep a faint trail, none over the cat
   for (const q of G.parts) {
     q.t += dt; const k = Math.exp(-q.drag * dt); q.vx *= k; q.vy *= k; q.x += q.vx * dt; q.y += q.vy * dt;
     if (q.k === 'chip') { q.vz -= 620 * dt; q.z += q.vz * dt; q.rot += q.vr * dt; if (q.z < 0) { q.z = 0; q.vz *= -0.35; q.vr *= 0.5; q.vx *= 0.6; q.vy *= 0.6; } }
@@ -1501,7 +1501,10 @@ function render(now) {
   drawParts(c, inView);
   for (const s of G.shots) {
     if (s.kind === 'hair') drawIco(c, s.ico || 'hairball', s.x, s.y, s.r * (s.ico === 'fishbone' ? 4.4 : 3.6), s.ico === 'fishbone' ? Math.atan2(s.vy, s.vx) : gt * 10);
-    else if (s.kind === 'bone') drawIco(c, s.ico || 'fishbone', s.x, s.y, s.r * 3.2, s.rot);
+    else if (s.kind === 'bone') {   // big bones grow slower than their reach and turn see-through near the cat, so neither the cat nor enemies get buried
+      const near = Math.hypot(s.x - p.x, s.y - p.y), a = s.r > 20 ? (near < 70 ? 0.45 : 0.85) : 1;
+      c.globalAlpha = a; drawIco(c, s.ico || 'fishbone', s.x, s.y, Math.min(70, 42 * Math.sqrt(s.r / 13)), s.rot); c.globalAlpha = 1;
+    }
     else if (s.kind === 'lob') drawIco(c, s.ico || 'bowl', s.x, s.y, s.r * 3.2, s.rot);
     else if (s.kind === 'ball') drawIco(c, s.ico || 'ball', s.x, s.y, s.r * 3.6, s.rot);
     else drawIco(c, s.ico || 'sardine', s.x, s.y, 34, Math.atan2(s.vy, s.vx));

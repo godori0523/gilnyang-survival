@@ -92,7 +92,7 @@ GN.WEAPONS = {
     evo: { name: '털뭉치 폭풍', needs: 'whisker', desc: '헤어볼을 쉬지 않고 쏜다', set: { cd: 0.14, amount: 1, dmg: 20, pierce: 4, rapid: 1 } } },
   fishbone: { name: '생선뼈 부메랑', role: 'atk', desc: '적을 모두 뚫고 돌아오는 부메랑', base: { dmg: 14, cd: 2.4, amount: 1 },
     ups: [{ dmg: 6 }, { amount: 1 }, { area: 0.25 }, { dmg: 8 }, { amount: 1 }, { speed: 0.25, dmg: 6 }, { amount: 1 }],
-    evo: { name: '고래뼈 부메랑', needs: 'feather', desc: '거대한 뼈가 더 자주 날아간다', set: { dmg: 60, area: 2.2, cd: 1.6 } } },
+    evo: { name: '고래뼈 부메랑', needs: 'feather', desc: '커다란 뼈가 더 자주 날아간다', set: { dmg: 72, area: 1.6, cd: 1.6 } } },
   yarn: { name: '회전 털실 공', role: 'atk', desc: '털실 공이 주위를 돈다', base: { dmg: 6, cd: 0, amount: 2 },
     ups: [{ amount: 1 }, { dmg: 4 }, { speed: 0.3 }, { amount: 1 }, { dmg: 5, area: 0.15 }, { amount: 1 }, { dmg: 6 }],
     evo: { name: '털실 회오리', needs: 'paw', desc: '털실 8개가 넓고 빠르게 돈다', set: { dmg: 26, amount: 8, area: 1.6, speed: 1.7 } } },
