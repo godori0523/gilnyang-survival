@@ -462,7 +462,7 @@ const FIRE = {
   },
   spill(w, S) {
     const p = G.p;
-    for (let i = 0; i < S.amount; i++) { const tg = randTarget(280); G.zones.push({ kind: 'puddle', x: tg ? tg.x : p.x + rand(-150, 150), y: tg ? tg.y : p.y + rand(-150, 150), r: 46 * S.area, life: 3 * S.dur, max: 3 * S.dur, tick: 0.15, dmg: S.dmg, slow: S.slow, confuse: S.confuse, dead: false }); }
+    for (let i = 0; i < S.amount; i++) { const tg = randTarget(280); const da = rand(TAU), dv = S.confuse ? 26 : 0; G.zones.push({ kind: 'puddle', x: tg ? tg.x : p.x + rand(-150, 150), y: tg ? tg.y : p.y + rand(-150, 150), r: 46 * S.area, life: 3 * S.dur, max: 3 * S.dur, tick: 0.15, dmg: S.dmg, slow: S.slow, confuse: S.confuse, vx: Math.cos(da) * dv, vy: Math.sin(da) * dv, seed: rand(TAU), dead: false }); }
   },
   bowl(w, S) {
     const p = G.p, n = S.amount;
@@ -600,6 +600,45 @@ function shotsUpdate(dt) {
     }
   }
 }
+/* spilled milk: a glossy, uneven puddle with a few splash drops around it */
+function drawMilk(c, z, gt) {
+  const k = Math.min(1, (z.max - z.life) / 0.25, z.life / 0.4), R = z.r * (0.55 + 0.45 * Math.min(1, (z.max - z.life) / 0.35)), s = z.seed || (z.x * 0.013 + z.y * 0.007), N = 9;
+  const rad = i => R * (0.86 + 0.1 * Math.sin(s * 3 + i * 1.9) + 0.05 * Math.sin(s * 7 + i * 3.3));
+  const blob = (sc, dy) => {   // a smooth closed curve through uneven points: curve to each point's midpoint with the point as control
+    const P = []; for (let i = 0; i < N; i++) { const a = i / N * TAU, r = rad(i) * sc; P.push([z.x + Math.cos(a) * r, z.y + dy + Math.sin(a) * r * 0.7]); }
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], m0 = mid(P[N - 1], P[0]);
+    c.beginPath(); c.moveTo(m0[0], m0[1]); for (let i = 0; i < N; i++) { const q = P[i], m = mid(q, P[(i + 1) % N]); c.quadraticCurveTo(q[0], q[1], m[0], m[1]); } c.closePath();
+  };
+  c.globalAlpha = 0.9 * k; pen(c, 1.2); blob(1, 0); c.fillStyle = z.slow ? '#e9f4ff' : '#ffffff'; c.fill(); c.stroke();
+  c.globalAlpha = 0.55 * k; blob(0.72, -R * 0.06); c.fillStyle = z.slow ? '#d7e9fb' : '#eef4fa'; c.fill();
+  c.globalAlpha = 0.9 * k; c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(z.x - R * 0.35, z.y - R * 0.22, R * 0.22, R * 0.08, -0.25, 0, TAU); c.fill();
+  for (let i = 0; i < 4; i++) { const a = s * 5 + i * 1.6, d = R * (1.08 + 0.12 * Math.sin(s + i)), x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d * 0.7, rr = R * (0.07 + 0.03 * Math.sin(s * 2 + i)); c.globalAlpha = 0.9 * k; pen(c, 1); ell(c, x, y, rr, rr * 0.8, z.slow ? '#e9f4ff' : '#ffffff'); }
+  if (z.tick > 0.3) { c.globalAlpha = 0.35 * k; c.strokeStyle = '#cfdcea'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(z.x, z.y, R * (1 - (z.tick - 0.3) * 3), R * 0.7 * (1 - (z.tick - 0.3) * 3), 0, 0, TAU); c.stroke(); }
+  c.globalAlpha = 1;
+}
+/* catnip cloud: a low, puffy green cloud drifting along the ground, with dizzy swirls and leaves rising from it */
+function drawCatnipCloud(c, z, gt) {
+  const k = Math.min(1, (z.max - z.life) / 0.3, z.life / 0.5), R = z.r * k, s = z.seed || 0;
+  const puffs = [[0, 0, 0.5]]; for (let j = 0; j < 7; j++) { const a = j / 7 * TAU + s; puffs.push([Math.cos(a) * 0.55, Math.sin(a) * 0.36, 0.36 + 0.06 * Math.sin(gt * 2.2 + j * 1.3 + s)]); }
+  const path = (grow, dy, sc) => { c.beginPath(); for (const [px, py, pr] of puffs) { const x = z.x + px * R, y = z.y + py * R + dy, r = pr * R * sc + grow; c.moveTo(x + r, y); c.ellipse(x, y, r, r * 0.8, 0, 0, TAU); } };
+  c.globalAlpha = 0.2 * k; c.fillStyle = '#2a2733'; c.beginPath(); c.ellipse(z.x, z.y + R * 0.3, R * 0.95, R * 0.35, 0, 0, TAU); c.fill();
+  c.globalAlpha = 0.92 * k;
+  path(1.6, 0, 1); c.fillStyle = '#5f9e50'; c.fill();                 // outline: one fill so the inner seams vanish
+  path(0, 0, 1); c.fillStyle = '#b7e3a6'; c.fill();
+  path(0, -R * 0.09, 0.82); c.fillStyle = '#d8f4cb'; c.fill();       // lighter tops
+  c.globalAlpha = 0.85 * k; c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(z.x - R * 0.3, z.y - R * 0.28, R * 0.16, R * 0.08, -0.3, 0, TAU); c.fill();
+  c.strokeStyle = '#5f9e50'; c.lineWidth = 1.6; c.lineCap = 'round';
+  for (let j = 0; j < 2; j++) {                                        // dizzy swirls
+    const cx = z.x + (j ? R * 0.28 : -R * 0.12), cy = z.y + (j ? R * 0.02 : R * 0.08), rot = gt * (j ? -4 : 4);
+    c.beginPath(); for (let t = 0; t <= 1; t += 0.06) { const a = rot + t * TAU * 1.6, rr = R * 0.03 + t * R * 0.13; const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.7; if (!t) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
+  }
+  for (let j = 0; j < 3; j++) {                                        // leaves floating up
+    const h = (gt * 0.5 + j / 3 + s) % 1, x = z.x + Math.sin(gt * 1.5 + j * 2.1) * R * 0.4, y = z.y - R * 0.2 - h * R * 0.9;
+    c.globalAlpha = k * Math.min(1, (1 - h) * 3, h * 6); c.save(); c.translate(x, y); c.rotate(Math.sin(gt * 3 + j) * 0.8);
+    c.fillStyle = '#6fcf6f'; c.strokeStyle = '#3f7d36'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 0, 3.2, 6, 0, 0, TAU); c.fill(); c.stroke(); c.beginPath(); c.moveTo(0, -5); c.lineTo(0, 5); c.stroke(); c.restore();
+  }
+  c.globalAlpha = 1;
+}
 /* a newspaper twister: wind rings widening upward, sheets of paper circling them (back half dimmed, front half on top) */
 function drawTwister(c, z, gt) {
   const k = Math.min(1, (z.max - z.life) / 0.25, z.life / 0.4), R = z.r * k, Hh = z.r * 2 * k, sp = gt * 5 * z.spin, lean = Math.sin(z.wob) * R * 0.18;
@@ -627,6 +666,7 @@ function zonesUpdate(dt) {
   for (const z of G.zones) {
     if (z.dead) continue; z.life -= dt; if (z.life <= 0) { z.dead = true; continue; }
     if (z.kind === 'puddle') {
+      if (z.vx) { z.x += z.vx * dt; z.y += z.vy * dt; }     // catnip clouds drift with the wind
       z.tick -= dt; if (z.tick > 0) continue; z.tick = 0.4;
       forNear(z.x, z.y, z.r, e => { if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) { hurt(e, z.dmg, z.src || 'spill'); if (z.slow) e.slow = 0.8; if (z.confuse && !e.T.boss) e.confuse = 0.9; } });
     } else if (z.kind === 'twister') {
@@ -1063,7 +1103,9 @@ function render(now) {
 
   for (const z of G.zones) {
     if (!inView(z.x, z.y, 120)) continue;
-    if (z.kind === 'puddle') { const k = Math.min(1, (z.max - z.life) / 0.2, z.life / 0.3); c.globalAlpha = (z.col ? 0.5 : 0.8) * k; pen(c, 1.2); ell(c, z.x, z.y, z.r * k, z.r * k * 0.72, z.col || (z.slow ? '#e9f4ff' : '#ffffff')); c.globalAlpha = 1; }
+    if (z.kind === 'puddle' && z.confuse) drawCatnipCloud(c, z, gt);
+    else if (z.kind === 'puddle' && !z.col) drawMilk(c, z, gt);
+    else if (z.kind === 'puddle') { const k = Math.min(1, (z.max - z.life) / 0.2, z.life / 0.3); c.globalAlpha = (z.col ? 0.5 : 0.8) * k; pen(c, 1.2); ell(c, z.x, z.y, z.r * k, z.r * k * 0.72, z.col || (z.slow ? '#e9f4ff' : '#ffffff')); c.globalAlpha = 1; }
     else if (z.kind === 'twister') { const k = Math.min(1, (z.max - z.life) / 0.25, z.life / 0.4); c.fillStyle = 'rgba(42,39,51,.18)'; c.beginPath(); c.ellipse(z.x, z.y, z.r * 0.75 * k, z.r * 0.26 * k, 0, 0, TAU); c.fill(); }
     else drawIco(c, z.ico || 'boxtrap', z.x, z.y, 34);
   }

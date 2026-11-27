@@ -108,9 +108,9 @@ Object.assign(GN.WEAPONS, {
 /* ───────── balance pass: damage multipliers per weapon (Lv 1-8, and evolved) ─────────
    From a bot benchmark of each weapon alone against a dense crowd: outliers pulled toward the middle. */
 GN.BAL = { tuna: 0.4, spill: 0.35, bowl: 2, static: 0.56, laser: 1.3, ball: 2.1, tailwhip: 1.5, sardine: 0.94, boxtrap: 0.65,
-  catnipcloud: 1, flowerpot: 0.41, rubber: 3, bubble: 0.71, newspaper: 0.2, camera: 0.56, flashlight: 0.55, mousetoy: 0.6, cans: 2, bubblewrap: 0.58, shadowclaw: 0.9 };
+  catnipcloud: 0.76, flowerpot: 0.41, rubber: 3, bubble: 0.71, newspaper: 0.2, camera: 0.56, flashlight: 0.55, mousetoy: 0.6, cans: 2, bubblewrap: 0.58, shadowclaw: 0.9 };
 GN.BALE = { newspaper: 0.25, hairball: 1.2, meow: 1.3, tuna: 0.7, spill: 0.33, static: 0.34, laser: 1.1, ball: 3, kitten: 1.3, sardine: 0.75,
-  catnipcloud: 0.77, flowerpot: 0.37, rubber: 2, bubble: 0.45, roar: 1.2, camera: 0.21, flashlight: 0.95, mousetoy: 0.82, shadowclaw: 0.62 };
+  catnipcloud: 0.6, flowerpot: 0.37, rubber: 2, bubble: 0.45, roar: 1.2, camera: 0.21, flashlight: 0.95, mousetoy: 0.82, shadowclaw: 0.62 };
 
 /* ───────── 16 more passives ───────── */
 const PAS = (name, role, desc, max = 5) => ({ name, role, desc, max });
